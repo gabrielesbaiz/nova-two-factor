@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+
 /*
 |--------------------------------------------------------------------------
 | Tool API Routes
@@ -10,7 +11,7 @@ use Illuminate\Support\Facades\Route;
 | are loaded by the ServiceProvider of your tool. They are protected
 | by your tool's "Authorize" middleware by default. Now, go build!
 |
-*/
+ */
 
 Route::get('register', [\Visanduma\NovaTwoFactor\Http\Controller\TwoFactorController::class, 'registerUser']);
 

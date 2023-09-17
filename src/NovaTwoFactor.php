@@ -2,13 +2,37 @@
 
 namespace Visanduma\NovaTwoFactor;
 
-use Illuminate\Http\Request;
-use Laravel\Nova\Menu\MenuSection;
 use Laravel\Nova\Nova;
 use Laravel\Nova\Tool;
+use Illuminate\Http\Request;
+use Laravel\Nova\Menu\MenuSection;
 
 class NovaTwoFactor extends Tool
 {
+    public static function promptEnabled(Request $request)
+    {
+        $timeout = config('nova-two-factor.reauthorize_timeout', 5);
+
+        $promptFor = config('nova-two-factor.reauthorize_urls', []);
+
+        $hasUrl = $request->is($promptFor);
+
+        $lastAttempt = session()->get('2fa.prompt_at', now()->subMinutes($timeout + 1));
+
+        if ($lastAttempt->diffInMinutes(now()) > $timeout && $hasUrl) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public static function prompt()
+    {
+        return inertia('NovaTwoFactor.Prompt', [
+            'referer' => request()->url(),
+        ]);
+    }
+
     /**
      * Perform any tasks that need to happen when the tool is booted.
      *
@@ -32,31 +56,5 @@ class NovaTwoFactor extends Tool
                 ->path('/nova-two-factor')
                 ->icon(config('nova-two-factor.menu_icon'));
         }
-    }
-
-    public static function promptEnabled(Request $request)
-    {
-
-        $timeout = config('nova-two-factor.reauthorize_timeout', 5);
-
-        $promptFor = config('nova-two-factor.reauthorize_urls', []);
-
-        $hasUrl = $request->is($promptFor);
-
-        $lastAttempt = session()->get('2fa.prompt_at', now()->subMinutes($timeout + 1));
-
-        if ($lastAttempt->diffInMinutes(now()) > $timeout && $hasUrl) {
-            return true;
-        }
-
-        return false;
-    }
-
-
-    public static function prompt()
-    {
-        return inertia('NovaTwoFactor.Prompt', [
-            'referer' => request()->url()
-        ]);
     }
 }

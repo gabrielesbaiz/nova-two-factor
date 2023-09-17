@@ -2,10 +2,9 @@
 
 namespace Visanduma\NovaTwoFactor\Models;
 
-use App\Models\User;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Crypt;
 
 class TwoFa extends Model
 {
@@ -15,7 +14,7 @@ class TwoFa extends Model
 
     protected $casts = [
         'confirmed' => 'boolean',
-        'google2fa_enable' => 'boolean'
+        'google2fa_enable' => 'boolean',
     ];
 
     public function getConnectionName()

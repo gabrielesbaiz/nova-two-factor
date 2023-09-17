@@ -12,7 +12,7 @@ use Visanduma\NovaTwoFactor\Http\Controller\TwoFactorController;
 | loaded by the ServiceProvider of the tool. The routes are protected
 | by your tool's "Authorize" middleware by default. Now - go build!
 |
-*/
+ */
 
 Route::get('/', [TwoFactorController::class, 'register']);
 Route::get('/settings', [TwoFactorController::class, 'settings']);
