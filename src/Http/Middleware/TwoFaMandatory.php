@@ -3,9 +3,12 @@
 namespace Visanduma\NovaTwoFactor\Http\Middleware;
 
 use Closure;
+use Visanduma\NovaTwoFactor\Helpers\NovaUser;
 
 class TwoFaMandatory
 {
+    use NovaUser;
+
     /**
      * Handle an incoming request.
      *
@@ -25,6 +28,7 @@ class TwoFaMandatory
             'nova-vendor/nova-two-factor/toggle',
             'nova-vendor/nova-notifications',
             'nova/logout',
+            'admin/login',
             'admin/logout',
             'admin/nova-two-factor',
         ];
