@@ -2,16 +2,16 @@
 
 namespace Visanduma\NovaTwoFactor\Http\Controller;
 
-use BaconQrCode\Renderer\Image\SvgImageBackEnd;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Str;
-use PragmaRX\Google2FA\Google2FA as G2fa;
 use PragmaRX\Google2FAQRCode\Google2FA;
+use PragmaRX\Google2FA\Google2FA as G2fa;
 use PragmaRX\Google2FAQRCode\QRCode\Bacon;
-use Visanduma\NovaTwoFactor\Helpers\NovaUser;
 use Visanduma\NovaTwoFactor\NovaTwoFactor;
+use Illuminate\Support\Facades\RateLimiter;
+use Visanduma\NovaTwoFactor\Helpers\NovaUser;
+use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use Visanduma\NovaTwoFactor\TwoFaAuthenticator;
 
 class TwoFactorController
@@ -20,7 +20,7 @@ class TwoFactorController
 
     public function register()
     {
-        if ($this->novaUser()->twoFaConfirmed()) {
+        if ($this->novaUser()->hasTwoFactorAuthenticationConfirmed()) {
             return $this->settings();
         }
 
@@ -32,65 +32,8 @@ class TwoFactorController
     public function settings()
     {
         return inertia('NovaTwoFactor.Settings', [
-            'enabled' => $this->novaUser()->twoFaEnabled(),
+            'enabled' => $this->novaUser()->hasTwoFactorAuthenticationEnable(),
         ]);
-    }
-
-    private function generateRecoveryCode(): string
-    {
-        $recoveryKey = strtoupper(Str::random(16));
-        $recoveryKey = str_split($recoveryKey, 4);
-        $recoveryKey = implode('-', $recoveryKey);
-
-        return $recoveryKey;
-    }
-
-    private function registerUser()
-    {
-        $google2fa = new G2fa();
-        $secretKey = $google2fa->generateSecretKey();
-
-        $recovery = $this->generateRecoveryCode();
-        $recoveryKeyHashed = bcrypt($recovery);
-
-        if ($this->novaUser()->twofa) {
-
-            $this->novaUser()->twofa->update([
-                'recovery' => $recoveryKeyHashed,
-            ]);
-        } else {
-
-            $this->novaUser()->twofa()->create([
-                'google2fa_secret' => $secretKey,
-                'recovery' => $recoveryKeyHashed,
-            ]);
-        }
-
-        $this->novaUser()->refresh();
-
-        $url = null;
-        $company = config('app.name');
-        $email = $this->novaUser()->email;
-        $secretKey = $this->novaUser()->twofa->google2fa_secret;
-        $isSvg = false;
-
-        if (! config('nova-two-factor.use_offline_qr')) {
-            $url = $this->getOnlineQrCode($company, $email, $secretKey);
-
-        } else {
-            $isSvg = true;
-            $imageBackEnd = new SvgImageBackEnd;
-            $qrCodeService = new Bacon($imageBackEnd);
-            $url = (new Google2FA($qrCodeService))->getQRCodeInline($company, $email, $secretKey, 250);
-        }
-
-        $data = [
-            'qr_url' => $url,
-            'recovery' => $recovery,
-            'svg' => $isSvg,
-        ];
-
-        return $data;
     }
 
     public function verifyOtp(Request $request)
@@ -139,17 +82,15 @@ class TwoFactorController
 
     public function getOnlineQrCode($company, $holder, $secret, $size = 500)
     {
-
         $url = (new Google2FA())->getQRCodeUrl($company, $holder, $secret);
 
         return "https://api.qrserver.com/v1/create-qr-code/?size={$size}x{$size}&data={$url}";
-
     }
 
     public function authenticate(Request $request)
     {
         if (config('nova-two-factor.enable_max_attempts')) {
-            $throttleKey = 'nova-two-factor:authenticate:'.$this->novaUser()->id;
+            $throttleKey = 'nova-two-factor:authenticate:' . $this->novaUser()->id;
             $attempts = config('nova-two-factor.max_attempts_per_minute');
 
             if (RateLimiter::tooManyAttempts($throttleKey, $attempts)) {
@@ -182,9 +123,9 @@ class TwoFactorController
             $this->novaUser()->twoFa()->delete();
 
             return redirect()->to(config('nova.path'));
-        } else {
-            return back()->withErrors([__('Incorrect recovery code !')]);
         }
+
+        return back()->withErrors([__('Incorrect recovery code !')]);
     }
 
     public function validatePrompt(Request $request)
@@ -192,7 +133,6 @@ class TwoFactorController
         $authenticator = app(TwoFaAuthenticator::class)->boot($request);
 
         if ($authenticator->isValidOtp()) {
-
             NovaTwoFactor::setLastPromptTime();
 
             return response()->json([
@@ -212,7 +152,7 @@ class TwoFactorController
         }
 
         $request->validate([
-            'password' => 'required|current_password:'.config('nova.guard'),
+            'password' => 'required|current_password:' . config('nova.guard'),
         ]);
 
         app(TwoFaAuthenticator::class)->logout();
@@ -220,5 +160,59 @@ class TwoFactorController
         $this->novaUser()->twoFa()->delete();
 
         return response()->json(['message' => __('Two FA settings has been cleared')]);
+    }
+
+    private function generateRecoveryCode(): string
+    {
+        $recoveryKey = strtoupper(Str::random(16));
+        $recoveryKey = str_split($recoveryKey, 4);
+        $recoveryKey = implode('-', $recoveryKey);
+
+        return $recoveryKey;
+    }
+
+    private function registerUser()
+    {
+        $google2fa = new G2fa();
+        $secretKey = $google2fa->generateSecretKey();
+
+        $recovery = $this->generateRecoveryCode();
+        $recoveryKeyHashed = bcrypt($recovery);
+
+        if ($this->novaUser()->twofa) {
+            $this->novaUser()->twofa->update([
+                'recovery' => $recoveryKeyHashed,
+            ]);
+        } else {
+            $this->novaUser()->twofa()->create([
+                'google2fa_secret' => $secretKey,
+                'recovery' => $recoveryKeyHashed,
+            ]);
+        }
+
+        $this->novaUser()->refresh();
+
+        $url = null;
+        $company = config('app.name');
+        $email = $this->novaUser()->email;
+        $secretKey = $this->novaUser()->twofa->google2fa_secret;
+        $isSvg = false;
+
+        if (! config('nova-two-factor.use_offline_qr')) {
+            $url = $this->getOnlineQrCode($company, $email, $secretKey);
+        } else {
+            $isSvg = true;
+            $imageBackEnd = new SvgImageBackEnd;
+            $qrCodeService = new Bacon($imageBackEnd);
+            $url = (new Google2FA($qrCodeService))->getQRCodeInline($company, $email, $secretKey, 250);
+        }
+
+        $data = [
+            'qr_url' => $url,
+            'recovery' => $recovery,
+            'svg' => $isSvg,
+        ];
+
+        return $data;
     }
 }

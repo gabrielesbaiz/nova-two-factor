@@ -2,12 +2,12 @@
 
 namespace Visanduma\NovaTwoFactor;
 
+use Laravel\Nova\Nova;
 use Illuminate\Support\Facades\File;
+use Laravel\Nova\Events\ServingNova;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
-use Laravel\Nova\Events\ServingNova;
 use Laravel\Nova\Http\Middleware\Authenticate;
-use Laravel\Nova\Nova;
 use Visanduma\NovaTwoFactor\Http\Middleware\Authorize;
 
 class ToolServiceProvider extends ServiceProvider
@@ -20,33 +20,43 @@ class ToolServiceProvider extends ServiceProvider
     public function boot()
     {
         $this->loadJsonTranslationsFrom(lang_path('vendor/nova-two-factor'));
-        $this->loadViewsFrom(__DIR__.'/../resources/views', 'nova-two-factor');
+        $this->loadViewsFrom(__DIR__ . '/../resources/views', 'nova-two-factor');
 
         $this->app->booted(function () {
             $this->routes();
         });
 
         if ($this->app->runningInConsole()) {
-
             $this->publishes([
-                __DIR__.'/../config/nova-two-factor.php' => config_path('nova-two-factor.php'),
+                __DIR__ . '/../config/nova-two-factor.php' => config_path('nova-two-factor.php'),
             ], 'nova-two-factor.config');
 
             $this->publishes([
-                __DIR__.'/../database/migrations/' => database_path('migrations'),
+                __DIR__ . '/../database/migrations/' => database_path('migrations'),
             ], 'migrations');
 
             $this->publishes([
-                __DIR__.'/../resources/lang' => lang_path('vendor/nova-two-factor'),
+                __DIR__ . '/../resources/lang' => lang_path('vendor/nova-two-factor'),
             ], 'translations');
         }
 
         Nova::serving(function (ServingNova $event) {
-            $localeFile = lang_path('vendor/nova-two-factor/'.app()->getLocale().'.json');
+            $localeFile = lang_path('vendor/nova-two-factor/' . app()->getLocale() . '.json');
+
             if (File::exists($localeFile)) {
                 Nova::translations($localeFile);
             }
         });
+    }
+
+    /**
+     * Register any application services.
+     *
+     * @return void
+     */
+    public function register()
+    {
+        $this->mergeConfigFrom(__DIR__ . '/../config/nova-two-factor.php', 'nova-two-factor');
     }
 
     /**
@@ -61,20 +71,10 @@ class ToolServiceProvider extends ServiceProvider
         }
 
         Nova::router(['nova', Authenticate::class, Authorize::class], 'nova-two-factor')
-            ->group(__DIR__.'/../routes/inertia.php');
+            ->group(__DIR__ . '/../routes/inertia.php');
 
         Route::middleware(['nova', Authenticate::class, Authorize::class])
             ->prefix('nova-vendor/nova-two-factor')
-            ->group(__DIR__.'/../routes/api.php');
-    }
-
-    /**
-     * Register any application services.
-     *
-     * @return void
-     */
-    public function register()
-    {
-        $this->mergeConfigFrom(__DIR__.'/../config/nova-two-factor.php', 'nova-two-factor');
+            ->group(__DIR__ . '/../routes/api.php');
     }
 }

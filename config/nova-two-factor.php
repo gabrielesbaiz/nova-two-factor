@@ -6,8 +6,9 @@
  * */
 
 return [
-
     'enabled' => env('NOVA_TWO_FA_ENABLE', true),
+
+    'mandatory' => env('NOVA_TWO_FA_MANDATORY', false),
 
     'user_table' => 'users',
 
@@ -18,10 +19,10 @@ return [
     /* Encrypt the google secret values saved in database */
     'encrypt_google2fa_secrets' => false,
 
-    /* QR code can be generate using  online API or inbuilt 'BaconQrCode' package*/
+    /* QR code can be generate using  online API or inbuilt 'BaconQrCode' package */
     'use_offline_qr' => false,
 
-    'user_model' => \App\Models\User::class,
+    'user_model' => App\Models\User::class,
 
     /* Change visibility of Nova Two Fa menu in right sidebar */
     'showin_sidebar' => true,
@@ -32,13 +33,12 @@ return [
 
     /* Exclude any routes from 2fa security */
     'except_routes' => [
-        //
     ],
 
-    /**
+    /*
      * reauthorize these urls before access, within given timeout
      * you are allowed to use wildcards pattern for url matching
-     **/
+     */
     'reauthorize_urls' => [
         // 'resources/users/new',
         // 'resources/users/*/edit',
@@ -50,5 +50,4 @@ return [
     'enable_max_attempts' => false,
 
     'max_attempts_per_minute' => 3,
-
 ];
