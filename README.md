@@ -1,19 +1,18 @@
-# Laravel nova in-dashboard 2FA feature.
+# NovaTwoFactor
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/gabrielesbaiz/nova-two-factor.svg?style=flat-square)](https://packagist.org/packages/gabrielesbaiz/nova-two-factor)
-[![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/gabrielesbaiz/nova-two-factor/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/gabrielesbaiz/nova-two-factor/actions?query=workflow%3Arun-tests+branch%3Amain)
-[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/gabrielesbaiz/nova-two-factor/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/gabrielesbaiz/nova-two-factor/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/gabrielesbaiz/nova-two-factor.svg?style=flat-square)](https://packagist.org/packages/gabrielesbaiz/nova-two-factor)
 
-This is where your description should go. Limit it to a paragraph or two. Consider adding a small example.
+Laravel nova in-dashboard 2FA feature.
 
-## Support us
+Original code from [Visanduma/nova-two-factor](https://github.com/Visanduma/nova-two-factor)
 
-[<img src="https://github-ads.s3.eu-central-1.amazonaws.com/nova-two-factor.jpg?t=1" width="419px" />](https://spatie.be/github-ad-click/nova-two-factor)
+## Features
 
-We invest a lot of resources into creating [best in class open source packages](https://spatie.be/open-source). You can support us by [buying one of our paid products](https://spatie.be/open-source/support-us).
-
-We highly appreciate you sending us a postcard from your hometown, mentioning which of our package(s) you are using. You'll find our address on [our contact page](https://spatie.be/about-us). We publish all received postcards on [our virtual postcard wall](https://spatie.be/open-source/postcards).
+- ✅ Global enable / disable
+- ✅ Mandatory / Not mandatory
+- ✅ Google 2FA encrypted
+- ✅ BancodeQrCode / Google API
 
 ## Installation
 
@@ -40,20 +39,105 @@ This is the contents of the published config file:
 
 ```php
 return [
+    'enabled' => env('NOVA_TWO_FA_ENABLE', true),
+
+    'mandatory' => env('NOVA_TWO_FA_MANDATORY', false),
+
+    'user_table' => 'users',
+
+    'user_id_column' => 'id',
+
+    'connection_name' => env('DB_CONNECTION'),
+
+    /* Encrypt the google secret values saved in database */
+    'encrypt_google2fa_secrets' => false,
+
+    /* QR code can be generate using  Google API or inbuilt 'BaconQrCode' package */
+    'use_google_qr_code_api' => true,
+
+    'user_model' => App\Models\User::class,
+
+    /* Change visibility of Nova Two Fa menu in right sidebar */
+    'showin_sidebar' => true,
+
+    'menu_text' => 'Two FA',
+
+    'menu_icon' => 'lock-closed',
+
+    /* Exclude any routes from 2fa security */
+    'except_routes' => [],
+
+    /*
+     * reauthorize these urls before access, within given timeout
+     * you are allowed to use wildcards pattern for url matching
+     */
+    'reauthorize_urls' => [
+        // 'nova/resources/users/new',
+        // 'nova/resources/users/*/edit',
+    ],
+
+    /* timeout in minutes */
+    'reauthorize_timeout' => 5,
 ];
-```
-
-Optionally, you can publish the views using
-
-```bash
-php artisan vendor:publish --tag="nova-two-factor-views"
 ```
 
 ## Usage
 
+1. Pubish config & migration
+
+2. Use ProtectWith2FA trait in configured model
+
 ```php
-$novaTwoFactor = new Gabrielesbaiz\NovaTwoFactor();
-echo $novaTwoFactor->echoPhrase('Hello, Gabrielesbaiz!');
+
+namespace App\Models;
+
+use Gabrielesbaiz\NovaTwoFactor\ProtectWith2FA;
+
+class User extends Authenticatable{
+
+    use ProtectWith2FA;
+}
+```
+
+3. Add TwoFa middleware to nova config file
+
+```php
+/*
+    |--------------------------------------------------------------------------
+    | Nova Route Middleware
+    |--------------------------------------------------------------------------
+    |
+    | These middleware will be assigned to every Nova route, giving you the
+    | chance to add your own middleware to this stack or override any of
+    | the existing middleware. Or, you can just stick with this stack.
+    |
+    */
+
+    'middleware' => [
+        ...
+        \Gabrielesbaiz\NovaTwoFactor\Http\Middleware\TwoFa::class
+    ],
+
+```
+
+4. Register NovaTwoFactor tool in Nova Service Provider
+
+```php
+<?php
+
+class NovaServiceProvider extends NovaApplicationServiceProvider{
+
+public function tools()
+    {
+        return [
+            ...
+            new \Gabrielesbaiz\NovaTwoFactor\NovaTwoFactor()
+
+        ];
+    }
+
+}
+
 ```
 
 ## Testing
@@ -76,6 +160,7 @@ Please review [our security policy](../../security/policy) on how to report secu
 
 ## Credits
 
+- [Visanduma R & D](https://github.com/Visanduma)
 - [Gabriele Sbaiz](https://github.com/gabrielesbaiz)
 - [All Contributors](../../contributors)
 
