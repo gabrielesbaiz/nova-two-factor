@@ -9,4 +9,4 @@ mix.setPublicPath("dist")
     .postCss("resources/sass/tool.css", "css", [
         tailwindcss("tailwind.config.js"),
     ])
-    .nova("visanduma/nova-two-factor");
+    .nova("gabrielesbaiz/nova-two-factor");

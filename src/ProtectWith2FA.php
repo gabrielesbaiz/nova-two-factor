@@ -2,7 +2,7 @@
 
 namespace Gabrielesbaiz\NovaTwoFactor;
 
-use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\TwoFa;
+use Gabrielesbaiz\NovaTwoFactor\Models\TwoFa;
 
 trait ProtectWith2FA
 {

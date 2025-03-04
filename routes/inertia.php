@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Visanduma\NovaTwoFactor\Http\Controller\TwoFactorController;
+use Gabrielesbaiz\NovaTwoFactor\Http\Controller\TwoFactorController;
 
 /*
 |--------------------------------------------------------------------------
