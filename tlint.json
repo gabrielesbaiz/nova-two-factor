@@ -1,0 +1,15 @@
+{
+    "preset": "laravel",
+    "disabled": [
+        "AlphabeticalImports",
+        "ConcatenationNoSpacing",
+        "NoCompact",
+        "NoInlineVarDocs",
+        "OneLineBetweenClassVisibilityChanges",
+        "PureRestControllers",
+        "RemoveLeadingSlashNamespaces",
+        "UseAuthHelperOverFacade",
+        "MailableMethodsInBuild",
+        "NoDatesPropertyOnModels"
+    ]
+}
