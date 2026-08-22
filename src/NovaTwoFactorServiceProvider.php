@@ -72,6 +72,8 @@ class NovaTwoFactorServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
+        $this->publishAssets();
+
         $this->registerRateLimiters();
 
         // One listener for the whole event surface, so the audit trail cannot
@@ -83,5 +85,27 @@ class NovaTwoFactorServiceProvider extends PackageServiceProvider
         // config edits both depend on winning the last write, and provider
         // order is the only thing that decides that.
         $this->app->register(ToolServiceProvider::class);
+    }
+
+    /**
+     * Publish the pre-authentication bundle to `public/`.
+     *
+     * The in-SPA bundle is served by Nova through `Nova::script()`, but the
+     * challenge, step-up and enrollment pages render outside Nova's shell and
+     * load their script with a plain `<script src>` — so that file has to exist
+     * under `public/vendor/nova-two-factor`. Without this the pages still work
+     * (they degrade to a plain form post) but lose the segmented code input,
+     * passkey support and the lockout countdown.
+     */
+    protected function publishAssets(): void
+    {
+        if (! $this->app->runningInConsole()) {
+            return;
+        }
+
+        $this->publishes([
+            __DIR__.'/../dist/js/challenge.js' => public_path('vendor/nova-two-factor/js/challenge.js'),
+            __DIR__.'/../dist/css/tool.css' => public_path('vendor/nova-two-factor/css/tool.css'),
+        ], ['nova-two-factor-assets', 'laravel-assets']);
     }
 }

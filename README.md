@@ -71,6 +71,10 @@ composer require gabrielesbaiz/nova-two-factor
 php artisan vendor:publish --tag=nova-two-factor-migrations
 php artisan migrate
 php artisan vendor:publish --tag=nova-two-factor-config
+
+# The challenge, step-up and enrollment pages render outside Nova's shell, so
+# their script has to live under public/.
+php artisan vendor:publish --tag=nova-two-factor-assets
 ```
 
 Add the trait to every authenticatable model that should be able to hold a
