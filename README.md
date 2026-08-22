@@ -98,17 +98,32 @@ public function tools(): array
 }
 ```
 
-Nova's own two-factor feature must stay enabled — this package hooks into
-Fortify's login pipeline rather than replacing it:
+Nova's two-factor *feature flag* must stay enabled, for a narrower reason than
+it looks: Nova's `UserSecurity.vue` only renders the two-factor card when the
+feature is on, and the card is what this package replaces. `updatePasswords` is
+what registers `nova.password.confirm`, which guards every destructive route
+here.
 
 ```php
 use Laravel\Fortify\Features;
 
 Nova::fortify()->features([
     Features::updatePasswords(),
-    Features::twoFactorAuthentication(),
+    // 'confirm' => false: enrollment confirmation is handled by this package,
+    // not by Fortify's own endpoint.
+    Features::twoFactorAuthentication(['confirm' => false, 'confirmPassword' => false]),
 ]);
 ```
+
+> [!WARNING]
+> With the feature enabled, Fortify's `RedirectIfTwoFactorAuthenticatable` stays
+> in the login pipeline and will divert any user who already has a
+> `two_factor_secret` on their row to Nova's own challenge — before this
+> package's middleware ever runs. If your application previously used Fortify's
+> or Nova's two-factor, or ships its own on top of the
+> `TwoFactorAuthenticatable` trait, clear `two_factor_secret` /
+> `two_factor_recovery_codes` as part of the migration, or the two systems will
+> both try to challenge the same login.
 
 Then confirm the install:
 
