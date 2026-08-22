@@ -3,7 +3,6 @@
 Two-factor authentication for Laravel Nova 5: authenticator apps, passkeys, email codes and recovery codes, with enforcement policies, step-up re-authentication, trusted devices and admin oversight.
 
 [![Latest version](https://img.shields.io/packagist/v/gabrielesbaiz/nova-two-factor.svg?style=flat-square)](https://packagist.org/packages/gabrielesbaiz/nova-two-factor)
-[![Tests](https://img.shields.io/github/actions/workflow/status/gabrielesbaiz/nova-two-factor/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/gabrielesbaiz/nova-two-factor/actions)
 [![PHP](https://img.shields.io/packagist/dependency-v/gabrielesbaiz/nova-two-factor/php?style=flat-square)](composer.json)
 [![Downloads](https://img.shields.io/packagist/dt/gabrielesbaiz/nova-two-factor.svg?style=flat-square)](https://packagist.org/packages/gabrielesbaiz/nova-two-factor)
 [![License](https://img.shields.io/packagist/l/gabrielesbaiz/nova-two-factor.svg?style=flat-square)](LICENSE.md)

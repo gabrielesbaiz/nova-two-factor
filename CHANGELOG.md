@@ -59,8 +59,8 @@ Fixes, each with a regression test:
 - Nova integration: a sortable status field, reset and revoke actions, and
   adoption, method-mix and failure metrics.
 - `doctor`, `reset`, `prune` and `upgrade` artisan commands.
-- 133 tests, PHPStan level 6, and CI across PHP 8.2–8.4, Laravel 11–12, MySQL and
-  Postgres.
+- 146 tests and PHPStan level 6, run locally via `composer test` and
+  `composer analyse`.
 
 ### Changed
 
@@ -80,7 +80,9 @@ Fixes, each with a regression test:
   findings. The algorithm library `pragmarx/google2fa` is kept.
 - Every 1.x configuration key. See [UPGRADE.md](UPGRADE.md) for the mapping.
 - `ProtectWith2FA`, replaced by `HasTwoFactorAuthentication`.
-- The committed `dist/` directory, now built in CI with a staleness check.
+- `pragmarx/google2fa-laravel`. The compiled `dist/` is still committed, since a
+  Nova tool cannot function without it; `composer build-assets` rebuilds it and
+  reports drift before a tag.
 
 ### Requirements
 

@@ -18,6 +18,9 @@ composer analyse   # PHPStan
 composer format    # Pint
 ```
 
+There is no CI. The three commands above are the whole gate, so please run all
+of them — nothing downstream will catch it for you.
+
 ## Ground rules
 
 **Every security control needs a test that fails without it.** The suite carries
@@ -43,7 +46,8 @@ by affected-row count, which is correct under concurrency without a lock.
 
 SQLite cannot exercise the decisions that only matter on a real driver — the
 64-character credential-ID hash index, JSON columns, conditional-update
-semantics. CI runs MySQL 8.4 and Postgres 16; you can too:
+semantics. There is no CI, so run them yourself before submitting anything that
+touches the schema or a claim:
 
 ```bash
 DB_CONNECTION=mysql DB_DATABASE=testing vendor/bin/pest
@@ -64,8 +68,16 @@ on every page; `resources/css/tool.css` adds only what Nova has no utility for,
 built on Nova's `--colors-*` custom properties. Adding a second Tailwind build is
 what made the 1.x UI look foreign inside Nova, so please do not reintroduce one.
 
-`dist/` is gitignored during development and built in CI. A workflow fails the
-build if a committed bundle has drifted from its source.
+`dist/` **is committed**: a Nova tool is unusable without its compiled bundle,
+and with no CI to build one on release the repository has to carry it. Rebuild
+and check for drift before tagging:
+
+```bash
+composer build-assets
+```
+
+This is the thing to get wrong. 1.x shipped a bundle months out of step with its
+source, which is why its UI looked nothing like its code.
 
 ## Pull requests
 

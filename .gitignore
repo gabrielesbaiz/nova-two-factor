@@ -12,10 +12,10 @@ composer.lock
 npm-debug.log
 yarn-error.log
 
-# Built tool assets. Produced by `npm run build` and attached on release, so
-# they are never committed from a developer machine — 1.x shipped a bundle that
-# was months out of step with its source because of exactly that.
-/dist
+# NOTE: dist/ is deliberately committed. A Nova tool is unusable without its
+# compiled bundle, and with no CI to build one on release the repository has to
+# carry it. Run `composer build-assets` before tagging — 1.x shipped a bundle
+# months out of step with its source, so this is the thing to get wrong.
 
 # Generated from the committed templates
 /phpstan.neon
