@@ -1,0 +1,261 @@
+/*
+ * Nova already compiles unprefixed Tailwind 3 with `darkMode: 'class'` into
+ * public/vendor/nova/app.css, and that stylesheet is loaded on every Nova page.
+ * So this file adds only what Nova has no utility for, built on Nova's own
+ * `--colors-*` custom properties so `Nova::brandColors()` keeps working and a
+ * future Nova theme change is inherited for free.
+ *
+ * 1.x instead shipped a second, `tw-`-prefixed Tailwind build with preflight
+ * disabled. Prefixed utilities cannot inherit Nova's tokens, which is the
+ * actual reason nothing in the old UI matched the dashboard around it.
+ */
+
+/* ---------------------------------------------------------------------------
+ * One-time-code input
+ *
+ * A single real input sits transparently on top of N decorative boxes. That is
+ * what makes iOS/Android SMS autofill and password-manager TOTP autofill work;
+ * six separate inputs break all of them, and give a screen reader six
+ * unlabelled fields to read out.
+ * ------------------------------------------------------------------------- */
+.n2f-otp {
+    position: relative;
+    display: block;
+}
+
+.n2f-otp-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: transparent;
+    caret-color: transparent;
+    font-size: 1px;
+    letter-spacing: 100vw; /* pushes the real glyphs out of view */
+    text-indent: -100vw;
+}
+
+.n2f-otp-input:focus {
+    outline: none;
+}
+
+.n2f-otp-boxes {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: space-between;
+}
+
+.n2f-otp-box {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 3.25rem;
+    display: grid;
+    place-items: center;
+    font-size: 1.375rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    border: 1px solid rgba(var(--colors-gray-400), 0.5);
+    border-radius: 0.5rem;
+    background-color: rgba(var(--colors-white), 1);
+    color: rgba(var(--colors-gray-900), 1);
+    transition: border-color 120ms ease, box-shadow 120ms ease, transform 90ms ease;
+}
+
+.dark .n2f-otp-box {
+    background-color: rgba(var(--colors-gray-900), 1);
+    border-color: rgba(var(--colors-gray-600), 1);
+    color: rgba(var(--colors-gray-100), 1);
+}
+
+/* The box the caret is in. A single element moves, rather than restyling all N. */
+.n2f-otp-box[data-active='true'] {
+    border-color: rgba(var(--colors-primary-500), 1);
+    box-shadow: 0 0 0 2px rgba(var(--colors-primary-500), 0.28);
+}
+
+.n2f-otp-box[data-filled='true'] {
+    transform: scale(1.02);
+}
+
+.n2f-otp[data-state='invalid'] .n2f-otp-box {
+    border-color: rgba(var(--colors-red-500), 1);
+}
+
+.n2f-otp[data-state='invalid'] .n2f-otp-boxes {
+    animation: n2f-shake 180ms ease-in-out 0s 2;
+}
+
+.n2f-otp[data-state='valid'] .n2f-otp-box {
+    border-color: rgba(var(--colors-green-500), 1);
+}
+
+@keyframes n2f-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    75% { transform: translateX(3px); }
+}
+
+/* A blinking bar in the active box, so the invisible input still feels typed into. */
+.n2f-otp-box[data-active='true']::after {
+    content: '';
+    width: 1.5px;
+    height: 1.5rem;
+    background-color: rgba(var(--colors-primary-500), 1);
+    border-radius: 1px;
+    animation: n2f-blink 1s steps(2, start) infinite;
+}
+
+.n2f-otp-box[data-active='true'][data-filled='true']::after {
+    display: none;
+}
+
+@keyframes n2f-blink {
+    to { visibility: hidden; }
+}
+
+/* ---------------------------------------------------------------------------
+ * Buttons, rows and chrome
+ * ------------------------------------------------------------------------- */
+.n2f-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
+    font-size: 0.875rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 120ms ease;
+}
+
+.n2f-btn[disabled],
+.n2f-btn[aria-disabled='true'] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.n2f-btn-primary {
+    background-color: rgba(var(--colors-primary-500), 1);
+    color: #fff;
+}
+
+.n2f-btn-ghost {
+    background-color: transparent;
+    color: rgba(var(--colors-gray-500), 1);
+}
+
+.dark .n2f-btn-ghost {
+    color: rgba(var(--colors-gray-400), 1);
+}
+
+.n2f-method-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    border-radius: 0.375rem;
+    text-align: start;
+    text-decoration: none;
+    /* A full-width tap target, not just the label. */
+    min-height: 2.75rem;
+}
+
+.n2f-method-row:hover,
+.n2f-method-row[aria-current='true'] {
+    background-color: rgba(var(--colors-gray-900), 0.04);
+}
+
+.dark .n2f-method-row:hover,
+.dark .n2f-method-row[aria-current='true'] {
+    background-color: rgba(var(--colors-gray-100), 0.06);
+}
+
+.n2f-method-name {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: rgba(var(--colors-gray-900), 1);
+}
+
+.dark .n2f-method-name {
+    color: rgba(var(--colors-gray-100), 1);
+}
+
+.n2f-method-meta {
+    font-size: 0.75rem;
+    color: rgba(var(--colors-gray-400), 1);
+}
+
+/*
+ * Nova's own DividerLine component hardcodes fill="#D8E3EC", which reads as a
+ * bright seam in dark mode. This one is theme-correct.
+ */
+.n2f-divider {
+    height: 1px;
+    border: 0;
+    background-color: rgba(var(--colors-gray-900), 0.1);
+}
+
+.dark .n2f-divider {
+    background-color: rgba(var(--colors-gray-100), 0.1);
+}
+
+.n2f-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.0625rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+}
+
+.n2f-badge-ok {
+    background-color: rgba(var(--colors-green-500), 0.16);
+    color: rgba(var(--colors-green-700), 1);
+}
+
+.dark .n2f-badge-ok {
+    color: rgba(var(--colors-green-400), 1);
+}
+
+/* QR plate: white in both themes on purpose. Scanners need the contrast, and a
+ * themed QR that inverts in dark mode simply will not scan. */
+.n2f-qr {
+    background-color: #fff;
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    width: 12rem;
+    height: 12rem;
+    display: grid;
+    place-items: center;
+    flex: none;
+}
+
+.n2f-qr svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.n2f-key {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: 0.14em;
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .n2f-otp-boxes,
+    .n2f-otp-box,
+    .n2f-otp-box[data-active='true']::after {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+    }
+}

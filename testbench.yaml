@@ -1,0 +1,30 @@
+providers:
+  - Laravel\Nova\NovaCoreServiceProvider
+  - Laravel\Fortify\FortifyServiceProvider
+  - Gabrielesbaiz\NovaTwoFactor\NovaTwoFactorServiceProvider
+  - Workbench\App\Providers\WorkbenchServiceProvider
+
+migrations:
+  - workbench/database/migrations
+  - database/migrations
+
+seeders:
+  - Workbench\Database\Seeders\DatabaseSeeder
+
+workbench:
+  start: '/nova'
+  install: true
+  health: false
+  discovers:
+    web: true
+    api: false
+    commands: false
+    components: false
+    views: false
+  build:
+    - asset-publish
+    - create-sqlite-db
+    - db-wipe
+    - migrate-refresh
+  assets: []
+  sync: []

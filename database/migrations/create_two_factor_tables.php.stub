@@ -1,0 +1,142 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        $this->schema()->create($this->table('methods'), function (Blueprint $table): void {
+            $table->id();
+            $table->morphs('authenticatable');
+
+            $table->string('type', 32);
+            $table->string('name', 100);
+            $table->boolean('is_default')->default(false);
+
+            // Encrypted at rest via Eloquent casts. `text`, not `string(255)`:
+            // an encrypted 160-bit secret is ~250 characters before you add a
+            // MAC, and 1.x silently truncated.
+            $table->text('secret')->nullable();
+            $table->text('destination')->nullable();
+            $table->text('credential')->nullable();
+
+            // Plaintext, safe to render: "j***@example.com". The real
+            // destination never leaves the server.
+            $table->string('destination_hint', 64)->nullable();
+
+            // WebAuthn credential id, base64url. Looked up by its SHA-256 so the
+            // unique index fits inside MySQL's key length limit.
+            $table->text('credential_id')->nullable();
+            $table->char('credential_id_hash', 64)->nullable();
+
+            // Replay guards. `last_timestep` is the highest TOTP step ever
+            // accepted; `sign_count` the highest authenticator counter seen.
+            $table->unsignedBigInteger('last_timestep')->nullable();
+            $table->unsignedBigInteger('sign_count')->default(0);
+
+            $table->timestamp('confirmed_at')->nullable();
+            $table->timestamp('last_used_at')->nullable();
+            $table->timestamps();
+
+            $table->unique('credential_id_hash');
+            $table->index(['authenticatable_type', 'authenticatable_id', 'type'], 'ntf_methods_owner_type_idx');
+            $table->index(['authenticatable_type', 'authenticatable_id', 'confirmed_at'], 'ntf_methods_confirmed_idx');
+        });
+
+        $this->schema()->create($this->table('recovery_codes'), function (Blueprint $table): void {
+            $table->id();
+            $table->morphs('authenticatable');
+
+            // SHA-256, not bcrypt, and deliberately so: a code carries ~119 bits
+            // of entropy, so a slow KDF buys nothing, while a unique index turns
+            // verification into one equality lookup instead of a loop over every
+            // row calling Hash::check() — which is a CPU exhaustion vector.
+            $table->char('code_hash', 64)->unique();
+
+            $table->timestamp('used_at')->nullable();
+            $table->string('used_ip', 45)->nullable();
+            $table->timestamps();
+
+            $table->index(['authenticatable_type', 'authenticatable_id', 'used_at'], 'ntf_codes_unused_idx');
+        });
+
+        $this->schema()->create($this->table('trusted_devices'), function (Blueprint $table): void {
+            $table->id();
+            $table->morphs('authenticatable');
+
+            $table->char('token_hash', 64)->unique();
+            $table->string('name', 100)->nullable();
+            $table->char('client_hash', 64);
+            $table->string('ip', 45)->nullable();
+            $table->timestamp('last_used_at')->nullable();
+            $table->timestamp('expires_at');
+            $table->timestamps();
+
+            $table->index('expires_at');
+        });
+
+        $this->schema()->create($this->table('challenges'), function (Blueprint $table): void {
+            $table->id();
+            $table->morphs('authenticatable');
+            $table->unsignedBigInteger('method_id');
+
+            $table->string('purpose', 32);
+
+            // HMAC-SHA256 keyed on the app key, not a bare hash: a six-digit
+            // code is only ~20 bits, so an unkeyed digest of a leaked table is
+            // brute-forced instantly.
+            $table->char('code_hash', 64);
+
+            $table->unsignedTinyInteger('attempts')->default(0);
+            $table->timestamp('sent_at');
+            $table->timestamp('expires_at');
+            $table->timestamp('consumed_at')->nullable();
+            $table->timestamps();
+
+            $table->index(['method_id', 'consumed_at', 'expires_at'], 'ntf_challenges_active_idx');
+
+            $table->foreign('method_id')
+                ->references('id')->on($this->table('methods'))
+                ->cascadeOnDelete();
+        });
+
+        $this->schema()->create($this->table('audits'), function (Blueprint $table): void {
+            $table->id();
+            $table->nullableMorphs('authenticatable');
+
+            $table->string('event', 64);
+            $table->string('method_type', 32)->nullable();
+            $table->unsignedBigInteger('method_id')->nullable();
+            $table->string('ip', 45)->nullable();
+            $table->text('user_agent')->nullable();
+            $table->json('context')->nullable();
+            $table->timestamp('created_at')->nullable()->index();
+
+            $table->index(['authenticatable_type', 'authenticatable_id', 'created_at'], 'ntf_audits_owner_idx');
+            $table->index(['event', 'created_at'], 'ntf_audits_event_idx');
+        });
+    }
+
+    public function down(): void
+    {
+        // Dropped children first: `challenges` holds the foreign key.
+        foreach (['challenges', 'audits', 'trusted_devices', 'recovery_codes', 'methods'] as $table) {
+            $this->schema()->dropIfExists($this->table($table));
+        }
+    }
+
+    private function table(string $key): string
+    {
+        return config("nova-two-factor.database.tables.{$key}", "two_factor_{$key}");
+    }
+
+    private function schema(): \Illuminate\Database\Schema\Builder
+    {
+        return Schema::connection(config('nova-two-factor.database.connection'));
+    }
+};

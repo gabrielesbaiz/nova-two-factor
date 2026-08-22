@@ -1,0 +1,32 @@
+# larastan is wired in automatically by phpstan/extension-installer,
+# so it must NOT be included here as well.
+parameters:
+    level: 6
+    paths:
+        - src
+        - config
+        - database
+    tmpDir: build/phpstan
+
+    # Laravel annotates `Config::get()` and friends optimistically, so PHPStan
+    # would otherwise flag the runtime guards around config values as redundant.
+    # Those guards are the point: a published config file is host-app-editable
+    # and can legitimately hold the wrong type.
+    treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        # Nova is a dev-only dependency and its own annotations are partial, so
+        # generic types on its classes cannot be resolved here.
+        - identifier: missingType.generics
+
+        # `env()` in a published config file is exactly where it belongs;
+        # larastan's rule targets calls that leak outside the config directory.
+        -
+            identifier: larastan.noEnvCallsOutsideOfConfig
+            path: config/*
+
+        # The trait is the package's public integration point — it is applied by
+        # the host app's user model, so nothing in `src/` uses it.
+        -
+            identifier: trait.unused
+            path: src/Concerns/HasTwoFactorAuthentication.php
+

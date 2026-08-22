@@ -1,24 +1,17 @@
 {
+    "name": "nova-two-factor",
     "private": true,
+    "type": "module",
     "scripts": {
-        "dev": "npm run development",
-        "development": "mix",
-        "watch": "mix watch",
-        "watch-poll": "mix watch -- --watch-options-poll=1000",
-        "hot": "mix watch --hot",
-        "prod": "npm run production",
-        "production": "mix --production",
-        "nova:install": "npm --prefix='../../vendor/laravel/nova' ci"
+        "dev": "BUNDLE=tool vite build --watch --mode development",
+        "build": "BUNDLE=tool vite build && BUNDLE=challenge vite build",
+        "lint": "prettier --check resources/js resources/css",
+        "format": "prettier --write resources/js resources/css"
     },
     "devDependencies": {
-        "@vue/compiler-sfc": "^3.2.22",
-        "laravel-mix": "^6.0.41",
-        "laravel-nova-devtool": "file:vendor/laravel/nova-devtool",
-        "node-sass": "^7.0.3",
-        "postcss": "^8.3.11",
-        "sass": "^1.54.4",
-        "sass-loader": "^10.3.1",
-        "tailwindcss": "^3.1.8",
-        "vue-loader": "^16.8.3"
+        "@vitejs/plugin-vue": "^5.2.1",
+        "prettier": "^3.4.2",
+        "vite": "^6.0.7",
+        "vue": "^3.5.13"
     }
 }

@@ -1,36 +1,55 @@
 {
     "name": "gabrielesbaiz/nova-two-factor",
-    "description": "Laravel nova in-dashboard 2FA feature.",
+    "description": "Two-factor authentication for Laravel Nova: authenticator apps, passkeys, email codes, recovery codes, enforcement policies, step-up re-authentication and admin oversight.",
     "keywords": [
-        "Gabriele Sbaiz",
         "laravel",
-        "nova-two-factor"
+        "nova",
+        "two-factor",
+        "2fa",
+        "mfa",
+        "totp",
+        "webauthn",
+        "passkeys",
+        "security"
     ],
-    "homepage": "https://github.com/gabrielesbaiz/nova-two-factor",
     "license": "MIT",
+    "homepage": "https://github.com/gabrielesbaiz/nova-two-factor",
     "authors": [
         {
             "name": "Gabriele Sbaiz",
-            "email": "gabriele@sbaiz.com",
+            "email": "gabriele.sbaiz@noviasnet.it",
             "role": "Developer"
         }
     ],
     "require": {
-        "php": "^8.0",
-        "spatie/laravel-package-tools": "^1.16",
-        "illuminate/support": "^10.0|^11.0|^12.0",
+        "php": "^8.2",
+        "ext-json": "*",
+        "ext-openssl": "*",
         "bacon/bacon-qr-code": "^3.0",
-        "pragmarx/google2fa-laravel": "^2.0"
+        "illuminate/support": "^11.0|^12.0",
+        "laravel/fortify": "^1.25.4",
+        "pragmarx/google2fa": "^8.0",
+        "spatie/laravel-package-tools": "^1.16",
+        "web-auth/webauthn-lib": "^5.1"
     },
     "require-dev": {
-        "laravel/nova": "^5.0",
-        "laravel/nova-devtool": "^1.7",
+        "larastan/larastan": "^3.1",
+        "laravel/nova": "5.7.*",
+        "laravel/nova-devtool": "^1.8",
         "laravel/pint": "^1.14",
-        "nunomaduro/collision": "^8.1.1||^7.10.0",
-        "orchestra/testbench": "^10.0.0||^9.0.0||^8.22.0",
+        "nunomaduro/collision": "^8.1.1",
+        "orchestra/testbench": "^9.0|^10.0",
+        "orchestra/workbench": "^9.0|^10.0",
         "pestphp/pest": "^3.0",
         "pestphp/pest-plugin-arch": "^3.0",
-        "pestphp/pest-plugin-laravel": "^3.0"
+        "pestphp/pest-plugin-laravel": "^3.0",
+        "phpstan/extension-installer": "^1.4"
+    },
+    "conflict": {
+        "laravel/nova": "<5.7.0|>=6.0.0"
+    },
+    "suggest": {
+        "ext-sodium": "Required to verify Ed25519 (-8) passkey signatures."
     },
     "autoload": {
         "psr-4": {
@@ -41,17 +60,46 @@
     "autoload-dev": {
         "psr-4": {
             "Gabrielesbaiz\\NovaTwoFactor\\Tests\\": "tests/",
-            "Workbench\\App\\": "workbench/app/"
+            "Workbench\\App\\": "workbench/app/",
+            "Workbench\\Database\\Factories\\": "workbench/database/factories/",
+            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
         }
     },
     "scripts": {
-        "post-autoload-dump": "@composer run prepare",
+        "post-autoload-dump": [
+            "@clear",
+            "@prepare"
+        ],
+        "clear": "@php vendor/bin/testbench package:purge-skeleton --ansi",
         "prepare": "@php vendor/bin/testbench package:discover --ansi",
-        "analyse": "vendor/bin/phpstan analyse",
-        "test": "vendor/bin/pest",
-        "test-coverage": "vendor/bin/pest --coverage",
-        "format": "vendor/bin/pint"
+        "build": "@php vendor/bin/testbench workbench:build --ansi",
+        "serve": [
+            "Composer\\Config::disableProcessTimeout",
+            "@build",
+            "@php vendor/bin/testbench serve --ansi"
+        ],
+        "lint": [
+            "@php vendor/bin/pint --ansi",
+            "@php vendor/bin/phpstan analyse --verbose --ansi"
+        ],
+        "format": "@php vendor/bin/pint --ansi",
+        "analyse": "@php vendor/bin/phpstan analyse --verbose --ansi",
+        "test": "@php vendor/bin/pest",
+        "test-coverage": "@php vendor/bin/pest --coverage --min=90"
     },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Gabrielesbaiz\\NovaTwoFactor\\NovaTwoFactorServiceProvider"
+            ]
+        }
+    },
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://nova.laravel.com"
+        }
+    ],
     "config": {
         "sort-packages": true,
         "allow-plugins": {
@@ -59,20 +107,6 @@
             "phpstan/extension-installer": true
         }
     },
-    "extra": {
-        "laravel": {
-            "providers": [
-                "Gabrielesbaiz\\NovaTwoFactor\\NovaTwoFactorServiceProvider",
-                "Gabrielesbaiz\\NovaTwoFactor\\ToolServiceProvider"
-            ]
-        }
-    },
     "minimum-stability": "dev",
-    "prefer-stable": true,
-    "repositories": {
-        "nova": {
-            "type": "composer",
-            "url": "https://nova.laravel.com"
-        }
-    }
+    "prefer-stable": true
 }
