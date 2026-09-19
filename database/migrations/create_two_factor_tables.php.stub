@@ -10,9 +10,14 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Every morph index is named explicitly. Laravel derives a name from the
+        // table and both columns, which reaches 71 characters on the longer
+        // table names here — past MySQL's 64-character identifier limit, and a
+        // hard error on `migrate`. The limit does not exist on sqlite, so a
+        // package suite that only ever runs there cannot see this.
         $this->schema()->create($this->table('methods'), function (Blueprint $table): void {
             $table->id();
-            $table->morphs('authenticatable');
+            $table->morphs('authenticatable', 'ntf_methods_morph_idx');
 
             $table->string('type', 32);
             $table->string('name', 100);
@@ -50,7 +55,7 @@ return new class extends Migration
 
         $this->schema()->create($this->table('recovery_codes'), function (Blueprint $table): void {
             $table->id();
-            $table->morphs('authenticatable');
+            $table->morphs('authenticatable', 'ntf_codes_morph_idx');
 
             // SHA-256, not bcrypt, and deliberately so: a code carries ~119 bits
             // of entropy, so a slow KDF buys nothing, while a unique index turns
@@ -67,7 +72,7 @@ return new class extends Migration
 
         $this->schema()->create($this->table('trusted_devices'), function (Blueprint $table): void {
             $table->id();
-            $table->morphs('authenticatable');
+            $table->morphs('authenticatable', 'ntf_devices_morph_idx');
 
             $table->char('token_hash', 64)->unique();
             $table->string('name', 100)->nullable();
@@ -82,7 +87,7 @@ return new class extends Migration
 
         $this->schema()->create($this->table('challenges'), function (Blueprint $table): void {
             $table->id();
-            $table->morphs('authenticatable');
+            $table->morphs('authenticatable', 'ntf_challenges_morph_idx');
             $table->unsignedBigInteger('method_id');
 
             $table->string('purpose', 32);
@@ -107,7 +112,7 @@ return new class extends Migration
 
         $this->schema()->create($this->table('audits'), function (Blueprint $table): void {
             $table->id();
-            $table->nullableMorphs('authenticatable');
+            $table->nullableMorphs('authenticatable', 'ntf_audits_morph_idx');
 
             $table->string('event', 64);
             $table->string('method_type', 32)->nullable();
