@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Gabrielesbaiz\NovaTwoFactor\Console;
 
+use Gabrielesbaiz\NovaTwoFactor\Auth\SupersedeFortifyTwoFactorChallenge;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactor;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactorEnrollment;
 use Gabrielesbaiz\NovaTwoFactor\WebAuthn\RelyingParty;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Schema;
+use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable;
 use Throwable;
 
 /**
@@ -39,6 +41,7 @@ class DoctorCommand extends Command
         $this->checkAppKey();
         $this->checkTables();
         $this->checkMiddleware();
+        $this->checkFortifyChallenge();
         $this->checkMethods();
         $this->checkWebAuthn();
         $this->checkEnforcement();
@@ -130,6 +133,40 @@ class DoctorCommand extends Command
                 "Not registered on {$group}. Two-factor can be bypassed through the {$label} routes.",
             );
         }
+    }
+
+    /**
+     * Fortify's divert is the one conflict that shows up as a *working* login
+     * to the wrong challenge screen, so nothing looks broken and no error is
+     * logged — the operator just never sees this package's methods.
+     */
+    protected function checkFortifyChallenge(): void
+    {
+        if (! Config::get('nova-two-factor.fortify.supersede_challenge', true)) {
+            $this->caution(
+                'Fortify challenge',
+                'Not superseded. Users holding a legacy users.two_factor_secret reach Fortify\'s challenge, not this package\'s.',
+            );
+
+            return;
+        }
+
+        try {
+            $action = $this->laravel->make(RedirectIfTwoFactorAuthenticatable::class);
+        } catch (Throwable $exception) {
+            // Resolving the action pulls in the configured guard, so a broken
+            // guard surfaces here rather than at the next login attempt.
+            $this->problem('Fortify challenge', 'Could not be resolved: '.$exception->getMessage());
+
+            return;
+        }
+
+        $action instanceof SupersedeFortifyTwoFactorChallenge
+            ? $this->ok('Fortify challenge', 'Superseded — this package owns the Nova login challenge.')
+            : $this->problem(
+                'Fortify challenge',
+                'Resolves to ['.$action::class.']. Something rebound it after this package booted; the Nova login challenge is not ours.',
+            );
     }
 
     protected function checkMethods(): void

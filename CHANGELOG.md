@@ -58,8 +58,16 @@ Fixes, each with a regression test:
   secret.
 - Nova integration: a sortable status field, reset and revoke actions, and
   adoption, method-mix and failure metrics.
+- Fortify interoperability: Nova keeps Fortify's pre-authentication two-factor
+  divert in its login pipeline while the feature flag is on, which sent anyone
+  holding a `users.two_factor_secret` to Fortify's challenge before this package
+  ran. That action is now superseded (`fortify.supersede_challenge`), so the
+  challenge stays here. Credential validation, the `Failed` event and the login
+  rate limiter are untouched. An application running a separate Fortify
+  two-factor on another guard therefore keeps its own enrollments in those
+  columns instead of having to delete them.
 - `doctor`, `reset`, `prune` and `upgrade` artisan commands.
-- 146 tests and PHPStan level 6, run locally via `composer test` and
+- 153 tests and PHPStan level 6, run locally via `composer test` and
   `composer analyse`.
 
 ### Changed
@@ -87,3 +95,5 @@ Fixes, each with a regression test:
 ### Requirements
 
 - PHP 8.2+, Laravel 11 or 12, Nova 5.7+.
+- `pragmarx/google2fa` 8 or 9. The constraint accepts both, so the package can be
+  installed beside a Fortify recent enough to have moved to 9.

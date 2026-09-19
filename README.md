@@ -118,15 +118,39 @@ Nova::fortify()->features([
 ]);
 ```
 
+With the feature enabled, Fortify's `RedirectIfTwoFactorAuthenticatable` would
+normally stay in Nova's login pipeline and divert any user holding a
+`users.two_factor_secret` to Fortify's own challenge — before a single piece of
+this package has run. **This package supersedes that action for you**, so the
+challenge stays here, where the method choice, trusted devices and the audit
+trail live.
+
+Credential validation is untouched: a failed login still fires `Failed`, still
+counts against the login rate limiter and still throws the same validation
+exception. Only the divert is superseded, and an unverified session is still
+stopped — after authentication, by `RequireTwoFactor` on both Nova middleware
+groups.
+
+```php
+// config/nova-two-factor.php
+'fortify' => [
+    'supersede_challenge' => true,
+],
+```
+
+This matters most when `users.two_factor_*` is *not* stale — an application
+running a separate Fortify two-factor on another guard (a customer-facing front
+end sharing the user table) keeps its live enrollments in those columns.
+Deleting them, the obvious-looking remedy, would un-enrol every one of those
+users.
+
 > [!WARNING]
-> With the feature enabled, Fortify's `RedirectIfTwoFactorAuthenticatable` stays
-> in the login pipeline and will divert any user who already has a
-> `two_factor_secret` on their row to Nova's own challenge — before this
-> package's middleware ever runs. If your application previously used Fortify's
-> or Nova's two-factor, or ships its own on top of the
-> `TwoFactorAuthenticatable` trait, clear `two_factor_secret` /
-> `two_factor_recovery_codes` as part of the migration, or the two systems will
-> both try to challenge the same login.
+> Turn `supersede_challenge` off only if you intend Fortify to own the Nova
+> login challenge. With it off and a `two_factor_secret` on the row, users reach
+> Fortify's challenge and never see this package's methods — a login that works
+> and logs nothing, which is why `doctor` checks it explicitly. In that case,
+> clear `two_factor_secret` / `two_factor_recovery_codes` as part of the
+> migration, but only once you are certain no other guard depends on them.
 
 Then confirm the install:
 

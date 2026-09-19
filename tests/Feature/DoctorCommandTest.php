@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactor;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactorEnrollment;
+use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable as FortifyAction;
 
 it('passes on a correctly configured application', function (): void {
     $this->artisan('nova-two-factor:doctor')->assertSuccessful();
@@ -57,6 +58,22 @@ it('fails when a configured enforcement gate does not exist', function (): void 
 
     // Otherwise enforcement is on, nobody is in scope, and nothing says so.
     $this->artisan('nova-two-factor:doctor')->assertFailed();
+});
+
+it('fails when something else has taken back the Fortify challenge', function (): void {
+    // A login that lands on Fortify's challenge instead of ours looks like a
+    // working login, logs nothing, and simply never offers this package's
+    // methods — so only an explicit check finds it.
+    app()->forgetExtenders(FortifyAction::class);
+
+    $this->artisan('nova-two-factor:doctor')->assertFailed();
+});
+
+it('passes with a warning when superseding the Fortify challenge is turned off', function (): void {
+    config()->set('nova-two-factor.fortify.supersede_challenge', false);
+
+    // A deliberate choice, not a misconfiguration: Fortify owns the challenge.
+    $this->artisan('nova-two-factor:doctor')->assertSuccessful();
 });
 
 it('prunes expired records', function (): void {

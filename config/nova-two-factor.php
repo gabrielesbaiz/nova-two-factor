@@ -237,6 +237,30 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Fortify interoperability
+    |--------------------------------------------------------------------------
+    |
+    | Nova keeps Fortify's own two-factor challenge in its login pipeline while
+    | the `twoFactorAuthentication` feature is enabled — and that feature has to
+    | stay enabled for Nova's user-security card to render. Anyone whose row
+    | still carries a `users.two_factor_secret` is therefore diverted to
+    | Fortify's challenge before this package sees the request.
+    |
+    | Superseding it hands the challenge back to this package, which runs it
+    | after authentication through the Nova middleware groups. Leave it on
+    | unless you genuinely want Fortify to own the Nova login challenge — the
+    | alternative is deleting `users.two_factor_*`, which is destructive when a
+    | second guard (a customer-facing front end, say) has its own Fortify
+    | two-factor living on those same columns.
+    |
+    */
+
+    'fortify' => [
+        'supersede_challenge' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Nova integration
     |--------------------------------------------------------------------------
     */

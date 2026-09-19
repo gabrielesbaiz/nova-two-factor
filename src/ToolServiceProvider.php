@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Gabrielesbaiz\NovaTwoFactor;
 
+use Gabrielesbaiz\NovaTwoFactor\Auth\SupersedeFortifyTwoFactorChallenge;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireFreshTwoFactor;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactor;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactorEnrollment;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable;
 
 /**
  * Everything that has to happen *after* Nova has booted: middleware injection,
@@ -25,6 +27,7 @@ class ToolServiceProvider extends ServiceProvider
 
         $this->registerMiddlewareAlias();
         $this->registerMiddleware();
+        $this->supersedeFortifyChallenge();
     }
 
     /**
@@ -37,6 +40,39 @@ class ToolServiceProvider extends ServiceProvider
         $router = $this->app->make('router');
 
         $router->aliasMiddleware('nova.2fa.step-up', RequireFreshTwoFactor::class);
+    }
+
+    /**
+     * Take Fortify's pre-authentication two-factor divert out of Nova's login
+     * pipeline, so this package owns the challenge.
+     *
+     * Nova installs its own subclass of the action from inside a `ServingNova`
+     * listener, which fires per request — long after any provider has booted —
+     * so rebinding the abstract here would simply be overwritten. A container
+     * extender is used instead: extenders are keyed separately from bindings
+     * and survive a later `bind()`/`scoped()` on the same abstract, so this
+     * wins regardless of provider order.
+     *
+     * The concrete class is extended rather than Fortify's contract on
+     * purpose. Nova's binding, and Fortify's own contract binding, both resolve
+     * through it — but a host that has called
+     * `Fortify::redirectUserForTwoFactorAuthenticationUsing()` has replaced the
+     * contract deliberately, and that choice is left standing.
+     */
+    protected function supersedeFortifyChallenge(): void
+    {
+        if (! Config::get('nova-two-factor.enabled', true)) {
+            return;
+        }
+
+        if (! Config::get('nova-two-factor.fortify.supersede_challenge', true)) {
+            return;
+        }
+
+        $this->app->extend(
+            RedirectIfTwoFactorAuthenticatable::class,
+            fn ($action, $app): SupersedeFortifyTwoFactorChallenge => $app->make(SupersedeFortifyTwoFactorChallenge::class),
+        );
     }
 
     /**
