@@ -7,6 +7,7 @@ namespace Gabrielesbaiz\NovaTwoFactor\Http\Middleware;
 use Closure;
 use Gabrielesbaiz\NovaTwoFactor\Events\EnforcementBlocked;
 use Gabrielesbaiz\NovaTwoFactor\Support\Enforcement;
+use Gabrielesbaiz\NovaTwoFactor\Support\Routing;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Symfony\Component\HttpFoundation\Response;
@@ -61,8 +62,6 @@ class RequireTwoFactorEnrollment
 
     protected function enrollmentUrl(): string
     {
-        $prefix = trim((string) Config::get('nova.path', '/nova'), '/');
-
-        return '/'.trim($prefix.'/two-factor/required', '/');
+        return Routing::path('required');
     }
 }

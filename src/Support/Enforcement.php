@@ -138,8 +138,7 @@ class Enforcement
 
         $defaults = [
             // Our own enrollment and challenge surfaces, or there is no way out.
-            $prefix.'two-factor',
-            $prefix.'two-factor/*',
+            ...Routing::patterns(),
             $prefix.'user-security',
             $prefix.'user-security/*',
 

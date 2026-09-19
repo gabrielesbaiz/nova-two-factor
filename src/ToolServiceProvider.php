@@ -10,8 +10,11 @@ use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactor;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactorEnrollment;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable;
+use Laravel\Nova\Http\Middleware\Authenticate;
+use Laravel\Nova\Nova;
 
 /**
  * Everything that has to happen *after* Nova has booted: middleware injection,
@@ -27,6 +30,7 @@ class ToolServiceProvider extends ServiceProvider
 
         $this->registerMiddlewareAlias();
         $this->registerMiddleware();
+        $this->registerRoutes();
         $this->supersedeFortifyChallenge();
     }
 
@@ -81,7 +85,7 @@ class ToolServiceProvider extends ServiceProvider
      */
     protected function novaIsInstalled(): bool
     {
-        return class_exists(\Laravel\Nova\Nova::class);
+        return class_exists(Nova::class);
     }
 
     /**
@@ -137,5 +141,76 @@ class ToolServiceProvider extends ServiceProvider
                 $middleware,
             ))));
         }
+
+        $this->pushMiddlewareToNovaGroups($middleware);
+    }
+
+    /**
+     * Append the middleware to the router groups Nova has already built.
+     *
+     * Editing `nova.middleware` alone is not enough, and silently so. Nova
+     * compiles both config arrays into the `nova` and `nova:api` router groups
+     * inside its own core provider's `boot()`. That provider is registered
+     * before this one, so by the time this runs the groups exist and no longer
+     * consult the config — every guard here would sit in an array nothing
+     * reads, leaving Nova completely unguarded while `doctor` reported the
+     * configuration as correct.
+     *
+     * The config write is still made, for a host that boots this package
+     * before Nova, and `pushMiddlewareToGroup` is a no-op when the middleware
+     * is already present, so the two paths cannot double up.
+     *
+     * @param  array<int, class-string>  $middleware
+     */
+    protected function pushMiddlewareToNovaGroups(array $middleware): void
+    {
+        /** @var Router $router */
+        $router = $this->app->make('router');
+
+        $groups = $router->getMiddlewareGroups();
+
+        foreach (['nova', 'nova:api'] as $group) {
+            if (! isset($groups[$group])) {
+                continue;
+            }
+
+            // `nova:api` nests the `nova` group in a standard install, so
+            // pushing to both would run every guard twice per API request.
+            if ($group === 'nova:api' && in_array('nova', $groups[$group], true)) {
+                continue;
+            }
+
+            foreach ($middleware as $class) {
+                $router->pushMiddlewareToGroup($group, $class);
+            }
+        }
+    }
+
+    /**
+     * Register the challenge, step-up and management routes.
+     *
+     * Under Nova's own path, domain and authenticated middleware, so they
+     * inherit its session, guard and CSRF handling. Nothing else loads this
+     * file: a host application never sees `routes/nova.php`, and without this
+     * the challenge middleware redirects to a URL that 404s.
+     *
+     * The enforcement except-list already exempts `two-factor/*`, so carrying
+     * the `nova` group here cannot trap a user on the screen that releases
+     * them.
+     */
+    protected function registerRoutes(): void
+    {
+        if (! Config::get('nova-two-factor.enabled', true)) {
+            return;
+        }
+
+        if ($this->app->routesAreCached()) {
+            return;
+        }
+
+        Route::domain((string) Config::get('nova.domain') ?: null)
+            ->middleware(['nova', Authenticate::class])
+            ->prefix(Nova::path())
+            ->group(__DIR__.'/../routes/nova.php');
     }
 }

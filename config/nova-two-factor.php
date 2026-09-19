@@ -237,6 +237,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Routes
+    |--------------------------------------------------------------------------
+    |
+    | The path segment this package's own pages live under, below Nova's path.
+    |
+    | Worth changing in one case: Nova served at the domain root (`nova.path`
+    | empty), where the default lands these pages at `/two-factor/*`. If the
+    | application already owns a route of that name — its own front-end
+    | two-factor flow, say — one of the two silently disappears, because the
+    | first registration wins and the loser never appears in the route table.
+    |
+    */
+
+    'routes' => [
+        'prefix' => 'two-factor',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Fortify interoperability
     |--------------------------------------------------------------------------
     |

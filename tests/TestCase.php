@@ -65,17 +65,6 @@ abstract class TestCase extends Orchestra
         });
     }
 
-    /**
-     * Register the package routes the way a real Nova install does: inside
-     * Nova's authenticated middleware group, under Nova's own path.
-     */
-    protected function defineRoutes($router): void
-    {
-        $router->middleware(['web', 'auth'])
-            ->prefix(trim((string) config('nova.path', '/nova'), '/'))
-            ->group(__DIR__.'/../routes/nova.php');
-    }
-
     protected function defineDatabaseMigrations(): void
     {
         $this->loadLaravelMigrations();

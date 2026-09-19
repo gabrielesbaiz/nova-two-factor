@@ -6,6 +6,7 @@ namespace Gabrielesbaiz\NovaTwoFactor\Http\Middleware;
 
 use Closure;
 use Gabrielesbaiz\NovaTwoFactor\Support\Enforcement;
+use Gabrielesbaiz\NovaTwoFactor\Support\Routing;
 use Gabrielesbaiz\NovaTwoFactor\Support\TwoFactorSession;
 use Gabrielesbaiz\NovaTwoFactor\TrustedDevices\TrustedDeviceManager;
 use Gabrielesbaiz\NovaTwoFactor\TwoFactorManager;
@@ -99,8 +100,6 @@ class RequireTwoFactor
 
     protected function route(string $path): string
     {
-        $prefix = trim((string) Config::get('nova.path', '/nova'), '/');
-
-        return '/'.trim($prefix.'/two-factor/'.$path, '/');
+        return Routing::path($path);
     }
 }

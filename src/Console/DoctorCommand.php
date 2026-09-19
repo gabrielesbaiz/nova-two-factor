@@ -38,6 +38,16 @@ class DoctorCommand extends Command
     {
         $this->components->info('Checking two-factor authentication…');
 
+        // A disabled install is a valid state, not a broken one. An application
+        // serving several Nova panels from one codebase turns the package off
+        // per domain, and reporting that as a misconfiguration would fail every
+        // deploy pipeline it is meant to protect.
+        if (! Config::get('nova-two-factor.enabled', true)) {
+            $this->components->warn('Two-factor authentication is disabled (nova-two-factor.enabled). Nothing to check.');
+
+            return self::SUCCESS;
+        }
+
         $this->checkAppKey();
         $this->checkTables();
         $this->checkMiddleware();
@@ -115,14 +125,28 @@ class DoctorCommand extends Command
      */
     protected function checkMiddleware(): void
     {
-        foreach (['nova.middleware' => 'page', 'nova.api_middleware' => 'API'] as $group => $label) {
-            $stack = Config::get($group, []);
-            $stack = is_array($stack) ? $stack : [];
+        // Asserted against the router, not config('nova.middleware'). Nova
+        // compiles that config into its router groups during its own provider's
+        // boot and never reads it again, so a guard present only in the config
+        // array is a guard that never runs — which is precisely the silent
+        // failure this check exists to catch.
+        $groups = $this->laravel->make('router')->getMiddlewareGroups();
 
-            $hasChallenge = in_array(RequireTwoFactor::class, $stack, true);
-            $hasEnrollment = in_array(RequireTwoFactorEnrollment::class, $stack, true);
+        foreach (['nova' => 'page', 'nova:api' => 'API'] as $group => $label) {
+            if (! isset($groups[$group])) {
+                $this->problem("Middleware ({$label})", "Nova's [{$group}] middleware group does not exist.");
 
-            if ($hasChallenge && $hasEnrollment) {
+                continue;
+            }
+
+            $stack = $this->resolveGroup($groups, $group);
+
+            $missing = array_values(array_filter(
+                [RequireTwoFactorEnrollment::class, RequireTwoFactor::class],
+                static fn (string $guard): bool => ! in_array($guard, $stack, true),
+            ));
+
+            if ($missing === []) {
                 $this->ok("Middleware ({$label})", 'Challenge and enrollment guards registered.');
 
                 continue;
@@ -130,9 +154,38 @@ class DoctorCommand extends Command
 
             $this->problem(
                 "Middleware ({$label})",
-                "Not registered on {$group}. Two-factor can be bypassed through the {$label} routes.",
+                "Missing from the [{$group}] router group. Two-factor can be bypassed through the {$label} routes.",
             );
         }
+    }
+
+    /**
+     * Flatten one middleware group, following the groups it nests.
+     *
+     * `nova:api` carries the `nova` group by name rather than repeating its
+     * entries, so a check that does not follow the reference reports a guarded
+     * stack as unguarded.
+     *
+     * @param  array<string, array<int, string>>  $groups
+     * @param  array<int, string>  $seen
+     * @return array<int, string>
+     */
+    protected function resolveGroup(array $groups, string $group, array $seen = []): array
+    {
+        if (in_array($group, $seen, true)) {
+            return [];
+        }
+
+        $seen[] = $group;
+        $stack = [];
+
+        foreach ($groups[$group] ?? [] as $entry) {
+            $stack = isset($groups[$entry])
+                ? [...$stack, ...$this->resolveGroup($groups, $entry, $seen)]
+                : [...$stack, $entry];
+        }
+
+        return $stack;
     }
 
     /**

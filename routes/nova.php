@@ -8,6 +8,7 @@ use Gabrielesbaiz\NovaTwoFactor\Http\Controllers\MethodController;
 use Gabrielesbaiz\NovaTwoFactor\Http\Controllers\RecoveryCodeController;
 use Gabrielesbaiz\NovaTwoFactor\Http\Controllers\StepUpController;
 use Gabrielesbaiz\NovaTwoFactor\Http\Controllers\TrustedDeviceController;
+use Gabrielesbaiz\NovaTwoFactor\Support\Routing;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -26,7 +27,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::prefix('two-factor')->name('nova-two-factor.')->group(function (): void {
+Route::prefix(Routing::prefix())->name('nova-two-factor.')->group(function (): void {
     // ---------------------------------------------------------------------
     // Challenge. Reachable while the session is authenticated but unverified.
     // ---------------------------------------------------------------------

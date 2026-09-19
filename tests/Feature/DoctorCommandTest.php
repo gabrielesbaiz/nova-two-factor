@@ -13,10 +13,33 @@ it('passes on a correctly configured application', function (): void {
 it('fails when the enforcement middleware is missing', function (): void {
     // The single most common 1.x install problem, and it produced no error at
     // all: `mandatory => true` with the middleware never registered.
-    config()->set('nova.middleware', array_values(array_diff(
-        config('nova.middleware', []),
+    //
+    // Stripped from the router group rather than from config('nova.middleware'):
+    // the router is what actually runs, and a config array Nova has already
+    // compiled and stopped reading is exactly the false PASS this check exists
+    // to prevent.
+    $router = app('router');
+
+    $router->middlewareGroup('nova', array_values(array_diff(
+        $router->getMiddlewareGroups()['nova'] ?? [],
         [RequireTwoFactor::class, RequireTwoFactorEnrollment::class],
     )));
+
+    $this->artisan('nova-two-factor:doctor')->assertFailed();
+});
+
+it('fails when the guards are in config but never reached the router', function (): void {
+    // The shape a real install produced: Nova compiles nova.middleware into its
+    // router groups during its own boot, so a package that only edits the config
+    // afterwards leaves Nova unguarded while the config reads as correct.
+    $router = app('router');
+
+    $router->middlewareGroup('nova', array_values(array_diff(
+        $router->getMiddlewareGroups()['nova'] ?? [],
+        [RequireTwoFactor::class, RequireTwoFactorEnrollment::class],
+    )));
+
+    config()->set('nova.middleware', [RequireTwoFactor::class, RequireTwoFactorEnrollment::class]);
 
     $this->artisan('nova-two-factor:doctor')->assertFailed();
 });
@@ -73,6 +96,15 @@ it('passes with a warning when superseding the Fortify challenge is turned off',
     config()->set('nova-two-factor.fortify.supersede_challenge', false);
 
     // A deliberate choice, not a misconfiguration: Fortify owns the challenge.
+    $this->artisan('nova-two-factor:doctor')->assertSuccessful();
+});
+
+it('reports nothing to check when the package is disabled', function (): void {
+    // Several Nova panels from one codebase is a normal shape, and a domain
+    // that turns the package off must not fail a deploy pipeline running
+    // `doctor`.
+    config()->set('nova-two-factor.enabled', false);
+
     $this->artisan('nova-two-factor:doctor')->assertSuccessful();
 });
 

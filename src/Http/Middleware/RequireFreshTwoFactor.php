@@ -6,6 +6,7 @@ namespace Gabrielesbaiz\NovaTwoFactor\Http\Middleware;
 
 use Closure;
 use Gabrielesbaiz\NovaTwoFactor\StepUp\StepUpManager;
+use Gabrielesbaiz\NovaTwoFactor\Support\Routing;
 use Gabrielesbaiz\NovaTwoFactor\TwoFactorManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
@@ -86,9 +87,7 @@ class RequireFreshTwoFactor
 
     protected function stepUpUrl(string $scope, string $intended): string
     {
-        $prefix = trim((string) Config::get('nova.path', '/nova'), '/');
-
-        return '/'.trim($prefix.'/two-factor/step-up', '/')
+        return Routing::path('step-up')
             .'?'.http_build_query(['scope' => $scope, 'intended' => $intended]);
     }
 }
