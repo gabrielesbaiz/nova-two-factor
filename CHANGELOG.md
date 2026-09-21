@@ -2,7 +2,7 @@
 
 All notable changes to `nova-two-factor` are documented here.
 
-## Unreleased
+## 2.1.0 — 2026-09-21
 
 ### Added
 
