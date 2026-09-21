@@ -2,6 +2,24 @@
 
 All notable changes to `nova-two-factor` are documented here.
 
+## Unreleased
+
+### Added
+
+- Laravel 13 support. `illuminate/support` now allows `^13.0`, alongside 11 and
+  12. Laravel 13 itself requires PHP 8.3, so an application on PHP 8.2 simply
+  resolves to Laravel 12 as before.
+- Nova 5.11 is now permitted (`^5.7` in place of the `5.7.*` dev pin). Nova 5.11
+  is the first release that supports Laravel 13; the `>=6.0.0` conflict stands.
+
+### Changed
+
+- Test matrix moved to Testbench 11 and Pest 4 for the Laravel 13 path.
+- `Inertia\ServiceProvider` is now registered explicitly in the test harness.
+  Nova renders through Inertia but does not register the provider itself, and
+  Inertia 3 no longer arrives registered by another provider, which left
+  `Inertia\Ssr\Gateway` unbound.
+
 ## 2.0.0 — 2026-09-21
 
 A complete rewrite. **Read [UPGRADE.md](UPGRADE.md) before upgrading**, and treat

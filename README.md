@@ -93,9 +93,9 @@ and both are explained in [DESIGN.md](DESIGN.md).
 
 ## Requirements
 
-- PHP 8.2+
-- Laravel 11 or 12
-- Nova 5.7+
+- PHP 8.2+ (8.3+ for Laravel 13)
+- Laravel 11, 12 or 13
+- Nova 5.7+ (5.11+ for Laravel 13)
 - `https` in production. Passkeys require a secure context; `localhost` is exempt.
 
 ## Installation

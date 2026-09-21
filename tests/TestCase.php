@@ -7,6 +7,7 @@ namespace Gabrielesbaiz\NovaTwoFactor\Tests;
 use Gabrielesbaiz\NovaTwoFactor\NovaTwoFactorServiceProvider;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Support\Facades\Gate;
+use Inertia\ServiceProvider as InertiaServiceProvider;
 use Laravel\Fortify\FortifyServiceProvider;
 use Laravel\Nova\NovaCoreServiceProvider;
 use Orchestra\Testbench\Concerns\WithWorkbench;
@@ -36,6 +37,10 @@ abstract class TestCase extends Orchestra
     protected function getPackageProviders($app): array
     {
         return [
+            // Nova renders through Inertia but does not register its provider,
+            // so the SSR gateway has no binding unless we register it here.
+            InertiaServiceProvider::class,
+
             // Nova first, so our provider boots after it — the whole
             // rebinding strategy depends on that order.
             NovaCoreServiceProvider::class,
