@@ -125,12 +125,25 @@ return new class extends Migration
             $table->index(['authenticatable_type', 'authenticatable_id', 'created_at'], 'ntf_audits_owner_idx');
             $table->index(['event', 'created_at'], 'ntf_audits_event_idx');
         });
+
+        // Settings written from the admin page. One row per key, so a single
+        // change is a single write and the audit row beside it can name exactly
+        // what moved. Deliberately not a one-row blob: two administrators
+        // saving different sections would otherwise overwrite each other.
+        $this->schema()->create($this->table('settings'), function (Blueprint $table): void {
+            $table->id();
+            $table->string('key')->unique();
+            $table->json('value')->nullable();
+            $table->string('updated_by_type')->nullable();
+            $table->unsignedBigInteger('updated_by_id')->nullable();
+            $table->timestamps();
+        });
     }
 
     public function down(): void
     {
         // Dropped children first: `challenges` holds the foreign key.
-        foreach (['challenges', 'audits', 'trusted_devices', 'recovery_codes', 'methods'] as $table) {
+        foreach (['settings', 'challenges', 'audits', 'trusted_devices', 'recovery_codes', 'methods'] as $table) {
             $this->schema()->dropIfExists($this->table($table));
         }
     }

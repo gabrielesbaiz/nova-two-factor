@@ -84,3 +84,62 @@ it('keeps the translation file in step with the strings in use', function (): vo
         expect($actual[1])->toBe($expected[1], "placeholders differ for [{$key}]");
     }
 });
+
+/**
+ * The gap that let three strings ship untranslated: both catalogues agreed with
+ * each other, and neither agreed with the code. Multi-line `__(` calls — the
+ * shape Prettier produces for a long string — were the ones that slipped.
+ */
+it('ships a translation for every string the code asks for', function (): void {
+    $catalogue = json_decode(
+        (string) file_get_contents(__DIR__.'/../../resources/lang/en.json'),
+        true,
+        flags: JSON_THROW_ON_ERROR,
+    );
+
+    $missing = [];
+
+    foreach (translatableSources() as $file) {
+        // `s` so the pattern spans lines, and a back-reference for the quote so
+        // an apostrophe inside a double-quoted string does not end the match.
+        preg_match_all('/__\(\s*([\'"])((?:\\\\.|(?!\1).)*)\1/s', (string) file_get_contents($file), $matches, PREG_SET_ORDER);
+
+        foreach ($matches as [, $quote, $raw]) {
+            $key = str_replace(['\\'.$quote, '\\\\'], [$quote, '\\'], $raw);
+
+            // Namespaced keys resolve against the package's PHP lang files, not
+            // the JSON catalogue — they exist precisely so a host application's
+            // own `lang/{locale}.json` cannot rename them.
+            if (str_contains($key, '::')) {
+                continue;
+            }
+
+            if (! array_key_exists($key, $catalogue)) {
+                $missing[$key] = basename((string) $file);
+            }
+        }
+    }
+
+    expect($missing)->toBe([], 'strings used in code but absent from en.json: '.json_encode(array_keys($missing)));
+});
+
+/**
+ * @return array<int, string>
+ */
+function translatableSources(): array
+{
+    $root = dirname(__DIR__, 2);
+    $files = [];
+
+    foreach (['src', 'resources/views', 'resources/js'] as $directory) {
+        $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root.'/'.$directory));
+
+        foreach ($iterator as $file) {
+            if ($file->isFile() && in_array($file->getExtension(), ['php', 'vue', 'js'], true)) {
+                $files[] = $file->getPathname();
+            }
+        }
+    }
+
+    return $files;
+}

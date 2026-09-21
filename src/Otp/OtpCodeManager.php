@@ -10,6 +10,7 @@ use Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorMethod;
 use Gabrielesbaiz\NovaTwoFactor\Results\VerificationResult;
 use Gabrielesbaiz\NovaTwoFactor\Support\MorphOwner;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 
@@ -56,6 +57,8 @@ class OtpCodeManager
             return $challenge;
         });
 
+        $this->rememberIssued($user, $code);
+
         return [$challenge, $code];
     }
 
@@ -93,7 +96,12 @@ class OtpCodeManager
                 return VerificationResult::failed(VerificationResult::ATTEMPTS_EXHAUSTED, $method);
             }
 
-            return VerificationResult::failed(VerificationResult::INVALID_CODE, $method);
+            return VerificationResult::failed(
+                $this->wasSuperseded($method, $submitted, $challenge)
+                    ? VerificationResult::SUPERSEDED
+                    : VerificationResult::INVALID_CODE,
+                $method,
+            );
         }
 
         if (! $challenge->consume()) {
@@ -116,6 +124,20 @@ class OtpCodeManager
      * Enforced server-side against `sent_at`; the countdown the UI shows is
      * only a courtesy and must never be the thing that holds the line.
      */
+    /**
+     * The code already in the user's inbox, if it is still good.
+     *
+     * Re-entering enrollment used to mint a fresh code and kill the one that
+     * had just been sent, so a user who clicked "Email code" twice was reading
+     * a dead code in the newest-looking mail.
+     */
+    public function liveChallenge(TwoFactorMethod $method): ?TwoFactorChallenge
+    {
+        $latest = $this->latestChallenge($method);
+
+        return $latest instanceof TwoFactorChallenge && $latest->isLive() ? $latest : null;
+    }
+
     public function canResend(TwoFactorMethod $method): bool
     {
         $latest = $this->latestChallenge($method);
@@ -174,6 +196,84 @@ class OtpCodeManager
     protected function hash(string $code): string
     {
         return hash_hmac('sha256', $this->normalize($code), (string) Config::get('app.key'));
+    }
+
+    /**
+     * Whether the digits typed were a code we ourselves replaced.
+     *
+     * Only ever consulted after a failed comparison, and only against codes
+     * issued to this same method, so it reveals nothing an attacker could not
+     * already establish by guessing. What it buys is the difference between
+     * "you mistyped" and "you are reading the wrong email", which is the
+     * difference between a user who retries and one who gives up.
+     */
+    protected function wasSuperseded(TwoFactorMethod $method, string $submitted, TwoFactorChallenge $live): bool
+    {
+        $hash = $this->hash($submitted);
+
+        // The rows first: cheap, and covers the ordinary case.
+        $inRows = TwoFactorChallenge::query()
+            ->where('authenticatable_type', $method->authenticatable_type)
+            ->where('authenticatable_id', $method->authenticatable_id)
+            ->whereKeyNot($live->getKey())
+            ->whereNotNull('consumed_at')
+            ->where('created_at', '>=', now()->subDay())
+            ->get()
+            ->contains(static fn (TwoFactorChallenge $previous): bool => hash_equals($previous->code_hash, $hash));
+
+        if ($inRows) {
+            return true;
+        }
+
+        // Then the short-lived record kept outside them. Challenges cascade
+        // when a method is deleted, so an administrative reset — or simply
+        // starting enrollment over — takes with it every trace of the codes
+        // already sitting in the user's inbox. Those are precisely the ones
+        // they are most likely to type next, and without this they come back
+        // as "that code is not correct", which sends them to retype it.
+        return $this->wasRecentlyIssued($method, $submitted);
+    }
+
+    /**
+     * Note that a code was issued, independently of the row that holds it.
+     *
+     * Hashes only, the same keyed HMAC already stored in the table, capped and
+     * short-lived: enough to recognise a code we ourselves killed, useless to
+     * anybody who cannot already read the cache *and* the application key.
+     */
+    protected function rememberIssued(Authenticatable $user, string $code): void
+    {
+        $key = $this->issuedKey($user->getMorphClass(), (string) $user->getAuthIdentifier());
+
+        /** @var array<int, string> $hashes */
+        $hashes = (array) Cache::get($key, []);
+
+        $hashes[] = $this->hash($code);
+
+        Cache::put($key, array_slice(array_unique($hashes), -20), now()->addDay());
+    }
+
+    protected function wasRecentlyIssued(TwoFactorMethod $method, string $submitted): bool
+    {
+        $key = $this->issuedKey(
+            (string) $method->authenticatable_type,
+            (string) $method->authenticatable_id,
+        );
+
+        $hash = $this->hash($submitted);
+
+        foreach ((array) Cache::get($key, []) as $previous) {
+            if (is_string($previous) && hash_equals($previous, $hash)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function issuedKey(string $type, string $id): string
+    {
+        return 'nova-two-factor:issued-codes|'.$type.'|'.$id;
     }
 
     protected function normalize(string $code): string

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Gabrielesbaiz\NovaTwoFactor\Enums\EnforcementMode;
 use Gabrielesbaiz\NovaTwoFactor\Enums\MethodType;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactor;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactorEnrollment;
@@ -35,6 +36,14 @@ function stepUpContext(): array
     $request->setLaravelSession(app('session.store'));
 
     return [app(StepUpManager::class), $request];
+}
+
+function novaTwoFactorUrl(string $path): string
+{
+    $prefix = trim((string) config('nova.path'), '/');
+    $segment = trim((string) config('nova-two-factor.routes.prefix', 'two-factor'), '/');
+
+    return '/'.trim($prefix.'/'.$segment.'/'.ltrim($path, '/'), '/');
 }
 
 it('does not enforce in optional mode', function (): void {
@@ -75,15 +84,48 @@ it('blocks once the grace window has closed', function (): void {
     expect($this->enforcement->blocks($user))->toBeTrue();
 });
 
-it('measures grace from a configured cutover date when there is one', function (): void {
+it('treats a configured date as the deadline everyone shares', function (): void {
+    // It reads as "everyone must comply by 1 October", so that is what it now
+    // means. Treating it as a *start* to count grace days from quietly gave
+    // every account the cutover date plus the window on top.
     config()->set('nova-two-factor.enforcement.mode', 'required');
+    config()->set('nova-two-factor.enforcement.grace_mode', 'date');
     config()->set('nova-two-factor.enforcement.grace_days', 10);
-    config()->set('nova-two-factor.enforcement.enforced_from', now()->subDays(3)->toDateString());
 
-    // An account created years ago is still inside the organisation-wide window.
     $user = User::factory()->create(['created_at' => now()->subYears(5)]);
 
+    config()->set('nova-two-factor.enforcement.enforced_from', now()->addDays(3)->toDateString());
     expect($this->enforcement->blocks($user))->toBeFalse();
+
+    config()->set('nova-two-factor.enforcement.enforced_from', now()->subDays(3)->toDateString());
+    expect($this->enforcement->blocks($user))->toBeTrue();
+});
+
+it('blocks immediately when grace is switched off', function (): void {
+    config()->set('nova-two-factor.enforcement.mode', 'required');
+    config()->set('nova-two-factor.enforcement.grace_enabled', false);
+    config()->set('nova-two-factor.enforcement.grace_days', 90);
+
+    // The days are still configured; the switch is what decides whether they
+    // are consulted at all.
+    expect($this->enforcement->blocks(User::factory()->create()))->toBeTrue();
+});
+
+it('counts the days a user has left', function (): void {
+    config()->set('nova-two-factor.enforcement.mode', 'required');
+    config()->set('nova-two-factor.enforcement.grace_days', 7);
+
+    $user = User::factory()->create(['created_at' => now()->subDays(2)]);
+
+    // Rounded up: "0 days left" on the morning of the deadline is true to the
+    // hour and useless to whoever still has today to act.
+    expect($this->enforcement->graceDaysLeft($user))->toBe(5)
+        ->and($this->enforcement->shouldWarn($user))->toBeTrue();
+
+    config()->set('nova-two-factor.enforcement.grace_days', 1);
+
+    expect($this->enforcement->graceDaysLeft($user))->toBe(0)
+        ->and($this->enforcement->shouldWarn($user))->toBeFalse();
 });
 
 it('stops blocking as soon as a factor is confirmed', function (): void {
@@ -290,4 +332,163 @@ it('matches protected patterns by method and wildcard', function (): void {
     expect($manager->scopeFor($delete))->toBe('users.destroy')
         ->and($manager->scopeFor($get))->toBeNull()
         ->and($manager->scopeFor($settings))->toBe('settings');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Encouraged: a prompt, not a wall
+|--------------------------------------------------------------------------
+*/
+
+it('shows the enrollment page to an unenrolled user under encouragement', function (): void {
+    config()->set('nova-two-factor.enforcement.mode', EnforcementMode::Encouraged->value);
+
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get('/'.trim(trim((string) config('nova.path'), '/').'/dashboards/main', '/'))
+        ->assertRedirect(novaTwoFactorUrl('required'));
+
+    $this->actingAs($user)
+        ->get(novaTwoFactorUrl('required'))
+        ->assertOk()
+        ->assertSee('Protect your account with a second factor', false)
+        ->assertSee('Not now', false)
+        // Never a deadline in a mode that has none.
+        ->assertDontSee('Set up a method to continue.', false);
+});
+
+it('never blocks a request under encouragement', function (): void {
+    config()->set('nova-two-factor.enforcement.mode', EnforcementMode::Encouraged->value);
+
+    $user = User::factory()->create();
+
+    // XHR keeps working: a reminder that answers a data call with HTML is a bug.
+    $this->actingAs($user)
+        ->getJson('/'.trim(trim((string) config('nova.path'), '/').'/nova-api/scripts/x', '/'))
+        ->assertStatus(404);
+});
+
+it('stays quiet for the configured number of days once waved away', function (): void {
+    config()->set('nova-two-factor.enforcement.mode', EnforcementMode::Encouraged->value);
+    config()->set('nova-two-factor.enforcement.remind_every_days', 3);
+
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(novaTwoFactorUrl('required/remind-later'), ['snooze' => '1'])
+        ->assertRedirect();
+
+    $enforcement = app(Enforcement::class);
+
+    expect($enforcement->shouldRemind($user))->toBeFalse();
+
+    $this->travel(4)->days();
+
+    expect($enforcement->shouldRemind($user))->toBeTrue();
+});
+
+/**
+ * Unticked buys this session, ticked buys days. Recording nothing at all sent
+ * the user back to the page they had just dismissed, on the next request.
+ */
+it('stops asking for the rest of the session when the box is left unticked', function (): void {
+    config()->set('nova-two-factor.enforcement.mode', EnforcementMode::Encouraged->value);
+
+    $user = User::factory()->create();
+    $dashboard = '/'.trim(trim((string) config('nova.path'), '/').'/dashboards/main', '/');
+
+    $this->actingAs($user)->get($dashboard)->assertRedirect(novaTwoFactorUrl('required'));
+
+    $this->actingAs($user)->post(novaTwoFactorUrl('required/remind-later'))->assertRedirect();
+
+    // Same session: whatever Nova itself answers, it is no longer a bounce back
+    // to the page just dismissed.
+    $again = $this->actingAs($user)->get($dashboard);
+
+    expect($again->headers->get('Location'))->not->toBe(url(novaTwoFactorUrl('required')));
+
+    // The account itself is not snoozed — a fresh session asks again.
+    expect(app(Enforcement::class)->shouldRemind($user))->toBeTrue();
+
+    $this->flushSession();
+
+    $this->actingAs($user)->get($dashboard)->assertRedirect(novaTwoFactorUrl('required'));
+});
+
+it('refuses to defer once the grace window has closed', function (): void {
+    // Past the deadline there is nothing left to defer: the page is a wall, and
+    // an endpoint that waves it away would be the way around enforcement.
+    config()->set('nova-two-factor.enforcement.mode', EnforcementMode::Required->value);
+    config()->set('nova-two-factor.enforcement.grace_days', 0);
+
+    $this->actingAs(User::factory()->create(['created_at' => now()->subYears(1)]))
+        ->post(novaTwoFactorUrl('required/remind-later'))
+        ->assertForbidden();
+});
+
+it('lets a user in grace defer for the session, but never for days', function (): void {
+    config()->set('nova-two-factor.enforcement.mode', EnforcementMode::Required->value);
+    config()->set('nova-two-factor.enforcement.grace_days', 30);
+
+    $user = User::factory()->create(['created_at' => now()->subDays(2)]);
+    $enforcement = app(Enforcement::class);
+
+    // Even asked for explicitly, the multi-day snooze is not on offer here: a
+    // countdown that can be silenced past its own deadline is not a countdown.
+    $this->actingAs($user)
+        ->post(novaTwoFactorUrl('required/remind-later'), ['snooze' => '1'])
+        ->assertRedirect();
+
+    expect($enforcement->isSnoozed($user))->toBeFalse();
+});
+
+it('warns a user who still has time, instead of waiting for the wall', function (): void {
+    // The gap this closes: under `required` with a grace window, nothing was
+    // shown until the day the wall appeared, so the first a user heard of the
+    // policy was being locked out by it.
+    config()->set('nova-two-factor.enforcement.mode', EnforcementMode::Required->value);
+    config()->set('nova-two-factor.enforcement.grace_days', 30);
+
+    Route::middleware(['web', RequireTwoFactorEnrollment::class])->get('/grace-probe', fn (): string => 'through');
+
+    $user = User::factory()->create(['created_at' => now()->subDays(2)]);
+
+    $this->actingAs($user)->get('/grace-probe')->assertRedirect(novaTwoFactorUrl('required'));
+
+    // And it can be put away for the session, rather than blocking work.
+    $this->actingAs($user)->post(novaTwoFactorUrl('required/remind-later'))->assertRedirect();
+    $this->actingAs($user)->get('/grace-probe')->assertOk();
+});
+
+/** Silence is asked for, never assumed: the box starts unticked. */
+it('does not pre-tick the reminder checkbox', function (): void {
+    config()->set('nova-two-factor.enforcement.mode', EnforcementMode::Encouraged->value);
+
+    $html = $this->actingAs(User::factory()->create())
+        ->get(novaTwoFactorUrl('required'))
+        ->assertOk()
+        ->getContent();
+
+    expect($html)->toContain('name="snooze"')
+        ->and(substr($html, (int) strpos($html, 'name="snooze"'), 120))->not->toContain('checked');
+});
+
+/**
+ * A reset that leaves last week's "don't remind me" in place hands back an
+ * account with nothing enrolled and nothing asking.
+ */
+it('starts prompting again after an administrative reset', function (): void {
+    config()->set('nova-two-factor.enforcement.mode', EnforcementMode::Encouraged->value);
+
+    $user = User::factory()->create();
+    $enforcement = app(Enforcement::class);
+
+    $enforcement->snooze($user);
+
+    expect($enforcement->shouldRemind($user))->toBeFalse();
+
+    app(Gabrielesbaiz\NovaTwoFactor\Actions\ResetTwoFactor::class)($user, 'test');
+
+    expect($enforcement->shouldRemind($user))->toBeTrue();
 });

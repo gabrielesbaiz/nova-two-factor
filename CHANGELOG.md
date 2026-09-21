@@ -2,7 +2,7 @@
 
 All notable changes to `nova-two-factor` are documented here.
 
-## 2.0.0 — unreleased
+## 2.0.0 — 2026-09-21
 
 A complete rewrite. **Read [UPGRADE.md](UPGRADE.md) before upgrading**, and treat
 every 1.x TOTP secret as compromised.
@@ -10,6 +10,69 @@ every 1.x TOTP secret as compromised.
 ### Security
 
 Fixes, each with a regression test:
+
+- **Reminder mail could be sent in a loop.** `compliance/remind` had no limiter
+  and no per-recipient cooldown, so one session could mail a colleague from your
+  domain as fast as the box answered — with 500 characters of caller-supplied
+  text in the body. The route is now throttled, and a cooldown keyed on the
+  *recipient* (`enforcement.remind_cooldown_hours`, default 24) applies to the
+  bulk Nova action too, which skips and reports rather than failing the batch.
+- **Recovery-code entropy is now checked rather than assumed.**
+  `nova-two-factor:doctor` reports the bits per code and warns when
+  `recovery_codes.length` is lowered or set below the generator's floor. The
+  codes are stored as an unkeyed SHA-256 while every other secret is keyed, and
+  that rests entirely on the length — so the length is verified, and the
+  reasoning is written down in the code and the README rather than inferred.
+- **The admin pages now start closed.** `nova.admin_gate` defaulted to null,
+  which meant every user who could reach Nova could read the compliance
+  dashboard and the activity log — every account's enrollment status, the
+  addresses behind them, and who was one lost device from a lockout. It now
+  defaults to `nova-two-factor:admin`, an ability a fresh application does not
+  define, and an undefined ability denies. Define it, point the key at an
+  ability you already have, or set it to null to keep the old behaviour
+  deliberately. `nova-two-factor:doctor` says which state you are in.
+- **`enforcement.except` had no floor and no visibility.** A pattern that was
+  too broad — `*`, `nova*`, `nova-api/*` — silently disabled enforcement for
+  everything it matched, with no error, no log and no symptom, while the
+  middleware check reported healthy. `nova-two-factor:doctor` now prints the
+  effective list and fails on any pattern that reaches the dashboard, a resource
+  page or the Nova API, judged by what it matches rather than how it is spelled.
+- **Cookies could ship without `Secure` on an HTTPS site.** Both package
+  cookies asked `$request->isSecure()`, which is false behind a TLS-terminating
+  proxy unless `TrustProxies` is configured — so the trusted-device cookie, a
+  thirty-day skip past the challenge, could travel on plain HTTP and be
+  replayed. They now follow `nova-two-factor.cookies.secure`, then
+  `session.secure`, and only then the request. `nova-two-factor:doctor` warns
+  when an HTTPS application has settled neither.
+- **The recovery limiter was dead config.** `rate_limits.recovery` was
+  documented and registered but wired to nothing: recovery codes spent the
+  challenge budget, five a minute with an escalating lockout, on the one path
+  reached because the usual factor is already gone. It now has its own bucket —
+  10 attempts for input shaped like a code, 3 for input that is not, and a flat
+  lockout that never doubles.
+- **A leaked password can no longer lock its owner out.** The challenge limiter
+  was keyed on the account alone, so an attacker who could not pass the
+  challenge could still spend the owner's budget until they were locked out —
+  denial of service under `required`. A browser that has cleared a challenge for
+  that account now gets its own bucket, identified by an HMAC-signed cookie that
+  grants nothing and cannot be forged; everything else shares the account's
+  bucket as before. `rate_limits.per_device`.
+- **A wave of lockouts now raises an alert.** A lockout protects one account; a
+  credential dump aimed at a panel locks many, and under `required` that is a
+  denial of service. Set `alerts.lockout_burst.accounts` and listen for
+  `Alerts\LockoutBurstDetected`. It counts distinct accounts, fires once per
+  burst, and is off until a threshold is set. Trusted devices are unaffected by
+  a lockout, which is what keeps a targeted attack survivable — now covered by a
+  test.
+- **The challenge could be bypassed with the password alone.** The two-factor
+  prefix is exempt from the challenge middleware — the challenge screen lives
+  there — which left every management route under it reachable by a session that
+  had never answered one. Two requests enrolled a new factor and confirmed it,
+  and confirming marked the session verified; regenerating recovery codes
+  returned working challenge answers behind a password prompt the attacker could
+  already satisfy. Those routes now carry `RequireVerifiedSession`, and
+  confirming only ever verifies a session when it is the account's *first*
+  factor.
 
 - **Unauthenticated endpoints.** 1.x registered its routes with a middleware
   stack containing no authentication, and an authorization check that defaulted

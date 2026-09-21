@@ -41,6 +41,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { __ } from '../support/translate'
 
 defineOptions({ name: 'TwoFactorCodeInput' })
 
@@ -62,16 +63,16 @@ const input = ref(null)
 const id = `n2f-code-${Math.random().toString(36).slice(2, 8)}`
 const armed = ref(true)
 
-const sanitize = value => (value ?? '').replace(/\D/g, '').slice(0, props.length)
+const sanitize = (value) => (value ?? '').replace(/\D/g, '').slice(0, props.length)
 
 const model = computed({
   get: () => sanitize(props.modelValue),
-  set: value => emit('update:modelValue', sanitize(value)),
+  set: (value) => emit('update:modelValue', sanitize(value)),
 })
 
 const state = computed(() => (props.invalid ? 'invalid' : null))
 
-const onPaste = event => {
+const onPaste = (event) => {
   const text = event.clipboardData?.getData('text') ?? ''
   armed.value = true
   model.value = text
@@ -79,7 +80,7 @@ const onPaste = event => {
 
 watch(
   () => props.modelValue,
-  value => {
+  (value) => {
     if (sanitize(value).length < props.length) {
       armed.value = true
       return
@@ -90,18 +91,18 @@ watch(
     armed.value = false
     // One frame, so the last digit paints before the request begins.
     requestAnimationFrame(() => emit('complete', sanitize(value)))
-  }
+  },
 )
 
 // Clearing after a failure must not silently re-fire the same submission.
 watch(
   () => props.invalid,
-  value => {
+  (value) => {
     if (value) {
       armed.value = false
       nextTick(() => input.value?.focus())
     }
-  }
+  },
 )
 
 onMounted(() => {

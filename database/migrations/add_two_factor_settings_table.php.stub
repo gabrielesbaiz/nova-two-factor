@@ -1,0 +1,49 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * The settings table, for installs that already ran the first migration.
+ *
+ * Kept separate rather than edited into `create_two_factor_tables`: that one has
+ * already run everywhere the package is installed, and a migration that has run
+ * does not run again. Editing it would create the table on fresh installs only —
+ * and leave every existing one with a settings page that fatals on load.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if ($this->schema()->hasTable($this->table())) {
+            return;
+        }
+
+        $this->schema()->create($this->table(), function (Blueprint $table): void {
+            $table->id();
+            $table->string('key')->unique();
+            $table->json('value')->nullable();
+            $table->string('updated_by_type')->nullable();
+            $table->unsignedBigInteger('updated_by_id')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        $this->schema()->dropIfExists($this->table());
+    }
+
+    private function table(): string
+    {
+        return config('nova-two-factor.database.tables.settings', 'two_factor_settings');
+    }
+
+    private function schema(): \Illuminate\Database\Schema\Builder
+    {
+        return Schema::connection(config('nova-two-factor.database.connection'));
+    }
+};

@@ -221,3 +221,145 @@ it('does not require user verification for an ordinary login', function (): void
 
     expect($payload['user_verification_required'])->toBeFalse();
 });
+
+/**
+ * The round trip nothing exercised, and the reason every passkey login failed.
+ *
+ * `deserializeCredential()` promised a `PublicKeyCredentialSource` while the
+ * library's denormaliser returns its parent, `CredentialRecord`. The `TypeError`
+ * landed in the catch one frame up and reached the user as "that code is not
+ * correct" — on a screen where no code is typed.
+ */
+it('rebuilds a stored credential without a type error', function (): void {
+    $service = app(Gabrielesbaiz\NovaTwoFactor\WebAuthn\WebAuthnService::class);
+
+    $record = Webauthn\CredentialRecord::create(
+        publicKeyCredentialId: random_bytes(32),
+        type: 'public-key',
+        transports: ['internal'],
+        attestationType: 'none',
+        trustPath: new Webauthn\TrustPath\EmptyTrustPath,
+        aaguid: Symfony\Component\Uid\Uuid::fromString('00000000-0000-0000-0000-000000000000'),
+        credentialPublicKey: random_bytes(64),
+        userHandle: 'user-handle',
+        counter: 0,
+    );
+
+    $stored = $service->serializeCredential($record);
+
+    $rebuilt = $service->deserializeCredential($stored);
+
+    expect($rebuilt)->toBeInstanceOf(Webauthn\CredentialRecord::class)
+        ->and($rebuilt->publicKeyCredentialId)->toBe($record->publicKeyCredentialId)
+        ->and($rebuilt->userHandle)->toBe('user-handle');
+});
+
+/**
+ * A passkey assertion is a signature, not a guess.
+ *
+ * Counting cancelled ceremonies and flaky readers against a five-try budget
+ * locked users out of the strongest factor they owned, for a minute at a time,
+ * and protected nothing — there is no attempt budget to exhaust in a signature.
+ */
+it('does not spend the code budget on passkey ceremonies', function (): void {
+    config()->set('nova-two-factor.rate_limits.challenge', ['per_user' => 2, 'per_ip' => 99, 'decay' => 60]);
+
+    $user = User::factory()->create();
+
+    $method = $user->twoFactorMethods()->create([
+        'type' => MethodType::WebAuthn,
+        'name' => 'Passkey',
+        'credential_id' => 'abc',
+        'credential' => ['publicKey' => 'x'],
+        'confirmed_at' => now(),
+        'is_default' => true,
+    ]);
+
+    $url = '/'.trim(trim((string) config('nova.path'), '/').'/two-factor/challenge', '/');
+
+    // Well past the two-attempt budget for typed codes.
+    foreach (range(1, 6) as $ignored) {
+        $response = $this->actingAs($user)->postJson($url, [
+            'method_id' => $method->id,
+            'credential' => ['id' => 'abc', 'response' => []],
+        ]);
+
+        expect($response->status())->toBe(422);
+    }
+
+    // And the budget for typed codes is still intact.
+    $this->actingAs($user)
+        ->postJson($url, ['method_id' => $method->id, 'code' => '000000'])
+        ->assertStatus(422);
+});
+
+/**
+ * A second passkey is a normal thing to own — a laptop and a security key, or a
+ * phone and a backup. Offering only the default credential meant the user had
+ * to guess which one the page had selected before touching anything, and
+ * presenting the other simply failed.
+ */
+it('offers every enrolled passkey at the challenge', function (): void {
+    $user = User::factory()->create();
+
+    foreach (['laptop', 'security-key'] as $id) {
+        $user->twoFactorMethods()->create([
+            'type' => MethodType::WebAuthn,
+            'name' => $id,
+            'credential_id' => $id,
+            'credential_id_hash' => hash('sha256', $id),
+            'credential' => ['publicKey' => 'x'],
+            'confirmed_at' => now(),
+        ]);
+    }
+
+    $driver = app(Gabrielesbaiz\NovaTwoFactor\Drivers\WebAuthnDriver::class);
+    $default = $user->twoFactorMethods()->first();
+
+    $payload = $driver->beginChallenge(
+        $default,
+        app(TwoFactorManager::class)
+            ->context($user, ChallengePurpose::Login),
+    );
+
+    $allowed = collect($payload['public_key']['allowCredentials'] ?? [])->pluck('id');
+
+    expect($allowed)->toHaveCount(2);
+});
+
+/**
+ * And whichever key answers is the one verified: the authenticator chooses, so
+ * the row the page started from may not be the row that signed.
+ */
+it('verifies against the passkey that actually signed', function (): void {
+    $user = User::factory()->create();
+
+    $first = $user->twoFactorMethods()->create([
+        'type' => MethodType::WebAuthn,
+        'name' => 'laptop',
+        'credential_id' => 'laptop',
+        'credential_id_hash' => hash('sha256', 'laptop'),
+        'credential' => ['publicKey' => 'x'],
+        'confirmed_at' => null,
+    ]);
+
+    $second = $user->twoFactorMethods()->create([
+        'type' => MethodType::WebAuthn,
+        'name' => 'security key',
+        'credential_id' => 'security-key',
+        'credential_id_hash' => hash('sha256', 'security-key'),
+        'credential' => ['publicKey' => 'x'],
+        'confirmed_at' => now(),
+    ]);
+
+    $driver = app(Gabrielesbaiz\NovaTwoFactor\Drivers\WebAuthnDriver::class);
+    $context = app(TwoFactorManager::class)
+        ->context($user, ChallengePurpose::Login);
+
+    // Started from the unconfirmed row, answered by the confirmed one: the
+    // result must be about the credential that signed, not the row we began at.
+    $result = $driver->verify($first, ['credential' => ['rawId' => 'security-key']], $context);
+
+    expect($result->method?->id)->toBe($second->id)
+        ->and($result->failure)->not->toBe(VerificationResult::UNCONFIRMED_METHOD);
+});

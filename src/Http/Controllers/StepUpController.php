@@ -9,6 +9,7 @@ use Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorMethod;
 use Gabrielesbaiz\NovaTwoFactor\StepUp\StepUpManager;
 use Gabrielesbaiz\NovaTwoFactor\TwoFactorManager;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\RateLimiter;
@@ -39,7 +40,7 @@ class StepUpController extends Controller
         ]);
     }
 
-    public function prepare(Request $request): JsonResponse
+    public function prepare(Request $request): JsonResponse|RedirectResponse
     {
         $validated = $request->validate([
             'method_id' => ['required', 'integer'],
@@ -53,6 +54,13 @@ class StepUpController extends Controller
         $payload = $this->twoFactor
             ->driver($method->type)
             ->beginChallenge($method, $this->twoFactor->context($user, ChallengePurpose::StepUp));
+
+        // A plain form post is how this screen works with JavaScript off, and
+        // an emailed code cannot be sent from the GET that renders the page:
+        // a link prefetch would spend the user's code before they read it.
+        if (! $request->expectsJson()) {
+            return back()->with('nova-two-factor.status', $this->sendStatus($payload ?? []));
+        }
 
         return response()->json($payload ?? [])
             ->header('Cache-Control', 'no-store, max-age=0');
@@ -98,6 +106,24 @@ class StepUpController extends Controller
             'expires_in' => $grant->secondsRemaining(),
             'scope' => $scope,
         ]);
+    }
+
+    /**
+     * What to tell someone who cannot see the JavaScript status line.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function sendStatus(array $payload): string
+    {
+        $destination = $payload['destination_hint'] ?? null;
+
+        if (! is_string($destination) || $destination === '') {
+            return __('Check your inbox for the code.');
+        }
+
+        return ($payload['sent'] ?? true) === false
+            ? __('A code was already sent to :destination.', ['destination' => $destination])
+            : __('We sent a code to :destination.', ['destination' => $destination]);
     }
 
     protected function ownedMethod(mixed $user, int $methodId): TwoFactorMethod

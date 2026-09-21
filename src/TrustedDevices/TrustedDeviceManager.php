@@ -8,6 +8,7 @@ use Gabrielesbaiz\NovaTwoFactor\Events\TrustedDeviceRegistered;
 use Gabrielesbaiz\NovaTwoFactor\Events\TrustedDeviceRevoked;
 use Gabrielesbaiz\NovaTwoFactor\Events\TrustedDeviceUsed;
 use Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorTrustedDevice;
+use Gabrielesbaiz\NovaTwoFactor\Support\CookieSecurity;
 use Gabrielesbaiz\NovaTwoFactor\Support\MorphOwner;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\Request;
@@ -61,7 +62,7 @@ class TrustedDeviceManager
             name: $this->cookieName(),
             value: $token,
             minutes: $days * 24 * 60,
-            secure: $request->isSecure(),
+            secure: CookieSecurity::secure($request),
             httpOnly: true,
             sameSite: 'lax',
         );

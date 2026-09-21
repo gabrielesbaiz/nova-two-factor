@@ -8,6 +8,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\RateLimiter;
+use Symfony\Component\HttpFoundation\Response;
 
 trait RegistersRateLimiters
 {
@@ -24,6 +25,8 @@ trait RegistersRateLimiters
 
     public const OTP_SEND = 'nova-two-factor:otp-send';
 
+    public const REMIND = 'nova-two-factor:remind';
+
     /**
      * @return array<string, string>
      */
@@ -35,6 +38,7 @@ trait RegistersRateLimiters
             self::RECOVERY => 'recovery',
             self::ENROLL => 'enroll',
             self::OTP_SEND => 'otp_send',
+            self::REMIND => 'remind',
         ];
     }
 
@@ -57,6 +61,30 @@ trait RegistersRateLimiters
      */
     protected function limitsFor(string $configKey, Request $request): array
     {
+        // A passkey assertion is a signature, not a guess: there is no budget
+        // of attempts to exhaust, and the authenticator itself rate-limits the
+        // human. Counting cancelled ceremonies and flaky readers against a
+        // five-try budget locked people out of the strongest factor they had
+        // — for a minute at a time, with nothing gained.
+        if ($this->isSignatureAttempt($request)) {
+            return [
+                Limit::perMinute((int) Config::get('nova-two-factor.rate_limits.webauthn_per_minute', 30))
+                    ->by($configKey.'|webauthn|'.$this->subjectKey($request))
+                    ->response(fn (Request $throttled, array $headers = []): Response => $this->throttledResponse($throttled, $headers, $configKey)),
+            ];
+        }
+
+        // A recovery code is not a code guess. It carries ~119 bits, so the
+        // budget here is not what stops it being guessed — the entropy is — and
+        // the person spending it has already lost their usual factor. Sharing
+        // the challenge's five-a-minute meant the attempt that matters most was
+        // usually the one already spent, so it gets its own bucket, with the
+        // controller charging the tighter half of it for input that is not even
+        // shaped like a code.
+        if ($configKey === 'challenge' && $this->isRecoveryAttempt($request)) {
+            $configKey = 'recovery';
+        }
+
         /** @var array{per_user?: int, per_ip?: int, decay?: int} $settings */
         $settings = Config::get("nova-two-factor.rate_limits.{$configKey}", []);
 
@@ -64,11 +92,79 @@ trait RegistersRateLimiters
 
         return [
             Limit::perMinutes($decayMinutes, (int) ($settings['per_user'] ?? 5))
-                ->by($configKey.'|subject|'.$this->subjectKey($request)),
+                ->by($configKey.'|subject|'.$this->subjectKey($request))
+                ->response(fn (Request $throttled, array $headers = []): Response => $this->throttledResponse($throttled, $headers, $configKey)),
 
             Limit::perMinutes($decayMinutes, (int) ($settings['per_ip'] ?? 20))
-                ->by($configKey.'|ip|'.$request->ip()),
+                ->by($configKey.'|ip|'.$request->ip())
+                ->response(fn (Request $throttled, array $headers = []): Response => $this->throttledResponse($throttled, $headers, $configKey)),
         ];
+    }
+
+    /**
+     * Whether this request is a WebAuthn ceremony rather than a typed secret.
+     *
+     * Kept generous rather than unlimited: the ceremony still costs a signature
+     * verification, so a loop hammering the endpoint is worth stopping — just
+     * not at the same count as a guessable code.
+     */
+    protected function isSignatureAttempt(Request $request): bool
+    {
+        return $request->filled('credential')
+            || $request->input('type') === 'webauthn';
+    }
+
+    /**
+     * Whether this request is spending a recovery code rather than a factor.
+     */
+    protected function isRecoveryAttempt(Request $request): bool
+    {
+        return $request->filled('recovery_code');
+    }
+
+    /**
+     * Answer a throttled request in the application's own words.
+     *
+     * Laravel's `throttle` middleware aborts with the literal string
+     * "Too Many Attempts." — untranslated, and silent about the two things a
+     * locked-out user needs: how long the wait is, and that a second factor is
+     * not the only way in.
+     *
+     * @param  array<string, mixed>  $headers
+     */
+    protected function throttledResponse(Request $request, array $headers = [], string $configKey = 'challenge'): Response
+    {
+        $seconds = (int) ($headers['Retry-After'] ?? 60);
+        $minutes = (int) ceil($seconds / 60);
+
+        // "Use another method" is true at a challenge, where a second factor or
+        // a recovery code is standing by. While enrolling it is a lie: the
+        // budget is shared across factors, so picking a different one hits the
+        // same wall. Telling a locked-out user to do something that cannot work
+        // is worse than saying nothing.
+        $suggestsAlternative = in_array($configKey, ['challenge', 'step_up'], true);
+
+        $message = match (true) {
+            $suggestsAlternative && $seconds >= 60 => __('Too many attempts. Try again in :minutes minutes, or use another method.', ['minutes' => $minutes]),
+            $suggestsAlternative => __('Too many attempts. Try again in :seconds seconds, or use another method.', ['seconds' => $seconds]),
+            $seconds >= 60 => __('Too many attempts. Try again in :minutes minutes.', ['minutes' => $minutes]),
+            default => __('Too many attempts. Try again in :seconds seconds.', ['seconds' => $seconds]),
+        };
+
+        // The field name matters: the challenge page renders errors under the
+        // input the user was typing into, so a bag keyed anything else shows
+        // nothing at all.
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'errors' => ['code' => [$message]],
+                'retry_after' => $seconds,
+            ], 429, $headers);
+        }
+
+        return back()
+            ->withErrors(['code' => $message])
+            ->withHeaders($headers);
     }
 
     /**

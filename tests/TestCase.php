@@ -6,6 +6,7 @@ namespace Gabrielesbaiz\NovaTwoFactor\Tests;
 
 use Gabrielesbaiz\NovaTwoFactor\NovaTwoFactorServiceProvider;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Support\Facades\Gate;
 use Laravel\Fortify\FortifyServiceProvider;
 use Laravel\Nova\NovaCoreServiceProvider;
 use Orchestra\Testbench\Concerns\WithWorkbench;
@@ -15,6 +16,22 @@ use Workbench\App\Providers\WorkbenchServiceProvider;
 abstract class TestCase extends Orchestra
 {
     use WithWorkbench;
+
+    /**
+     * The admin gate, as a configured application defines it.
+     *
+     * `nova.admin_gate` ships pointing at an ability no fresh application
+     * defines, so the admin pages start closed — anybody who wants them open
+     * has to say who may see them. The suite is that somebody: without this
+     * every test of the compliance, settings and activity surfaces would be
+     * asserting against a 403.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Gate::define('nova-two-factor:admin', static fn (): bool => true);
+    }
 
     protected function getPackageProviders($app): array
     {

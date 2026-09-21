@@ -53,20 +53,24 @@ class EmailOtpDriver implements TwoFactorMethodDriver
 
         $method = $this->pendingMethod($user, $destination);
 
+        // Issuing a code invalidates the last one, so minting on every entry to
+        // the screen turns "click Email code again" into "the code you were
+        // sent no longer works". Reuse what is already live; only a deliberate
+        // resend replaces it.
+        $live = $this->codes->liveChallenge($method);
+        $resending = (bool) ($input['resend'] ?? false);
+
+        if ($live !== null && ! $resending) {
+            return $this->intentFor($method, sent: false, live: $live);
+        }
+
+        if ($live !== null && ! $this->codes->canResend($method)) {
+            return $this->intentFor($method, sent: false, live: $live);
+        }
+
         $this->send($user, $method, ChallengePurpose::Enrollment);
 
-        return new EnrollmentIntent(
-            type: $this->type()->value,
-            destinationHint: $method->destination_hint,
-            expiresIn: (int) Config::get('nova-two-factor.methods.email.ttl', 300),
-            extra: [
-                'method_id' => $method->getKey(),
-                'resend_after' => (int) Config::get('nova-two-factor.methods.email.resend_after', 60),
-                // Stated in the UI rather than buried: users deserve to know
-                // this is the weakest option on the list.
-                'strength_warning' => true,
-            ],
-        );
+        return $this->intentFor($method, sent: true, live: $this->codes->liveChallenge($method));
     }
 
     public function completeEnrollment(Authenticatable $user, array $input): TwoFactorMethod
@@ -117,7 +121,33 @@ class EmailOtpDriver implements TwoFactorMethodDriver
 
     public function suggestName(array $input = []): string
     {
-        return 'Email code';
+        return $this->type()->label();
+    }
+
+    /**
+     * Everything the screen needs to explain the state of the inbox.
+     */
+    protected function intentFor(TwoFactorMethod $method, bool $sent, ?\Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorChallenge $live): EnrollmentIntent
+    {
+        $ttl = (int) Config::get('nova-two-factor.methods.email.ttl', 300);
+
+        return new EnrollmentIntent(
+            type: $this->type()->value,
+            destinationHint: $method->destination_hint,
+            expiresIn: $live !== null ? max(0, (int) round(now()->diffInSeconds($live->expires_at, false))) : $ttl,
+            extra: [
+                'method_id' => $method->getKey(),
+                // False means "there is already one in your inbox" — the
+                // difference decides whether the screen says "we sent" or
+                // "we already sent", and the user's next move with it.
+                'sent' => $sent,
+                'sent_at' => $live?->sent_at?->toIso8601String(),
+                'resend_after' => $this->codes->secondsUntilResend($method),
+                // Stated in the UI rather than buried: users deserve to know
+                // this is the weakest option on the list.
+                'strength_warning' => true,
+            ],
+        );
     }
 
     protected function send(Authenticatable $user, TwoFactorMethod $method, ChallengePurpose $purpose): void

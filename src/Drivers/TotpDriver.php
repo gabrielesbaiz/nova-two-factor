@@ -125,7 +125,7 @@ class TotpDriver implements TwoFactorMethodDriver
 
     public function suggestName(array $input = []): string
     {
-        return 'Authenticator app';
+        return $this->type()->label();
     }
 
     /**

@@ -23,6 +23,16 @@ final readonly class VerificationResult
 
     public const ALREADY_USED = 'already_used';
 
+    /**
+     * The code was correct, for a code we have since replaced.
+     *
+     * Issuing a new code invalidates the last one, so a user reading an older
+     * mail types six digits that were right when they were sent. Reported as
+     * "not correct" it is indistinguishable from a typo, and the user retypes
+     * the same dead code until the attempt budget runs out.
+     */
+    public const SUPERSEDED = 'superseded';
+
     public const NO_METHOD = 'no_method';
 
     public const UNCONFIRMED_METHOD = 'unconfirmed_method';

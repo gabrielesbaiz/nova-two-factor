@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Gabrielesbaiz\NovaTwoFactor\Nova\Metrics;
 
 use DateTimeInterface;
+use Gabrielesbaiz\NovaTwoFactor\Support\AuditedModels;
 use Gabrielesbaiz\NovaTwoFactor\Support\Enforcement;
 use Gabrielesbaiz\NovaTwoFactor\Support\TwoFactorUser;
 use Illuminate\Database\Eloquent\Model;
@@ -24,13 +25,21 @@ class TwoFactorAdoption extends Partition
 {
     public $name;
 
-    /** @var class-string<Model> */
-    protected string $model;
+    /**
+     * An explicit model still works — `new TwoFactorAdoption(User::class)` is
+     * what the README has always documented, and a host that wires the card
+     * onto one resource means that one model. Omit it and the metric measures
+     * every audited population instead, which is what the compliance dashboard
+     * wants.
+     *
+     * @var class-string<Model>|null
+     */
+    protected ?string $model;
 
     /**
-     * @param  class-string<Model>  $model
+     * @param  class-string<Model>|null  $model
      */
-    public function __construct(string $model)
+    public function __construct(?string $model = null)
     {
         parent::__construct();
 
@@ -44,39 +53,50 @@ class TwoFactorAdoption extends Partition
 
         $counts = ['enrolled' => 0, 'grace' => 0, 'overdue' => 0, 'optional' => 0];
 
-        // Chunked rather than loaded whole: this runs against the user table,
-        // which is the one table guaranteed to be large.
-        $this->model::query()
-            ->with(['twoFactorMethods' => static fn ($query) => $query->whereNotNull('confirmed_at')])
-            ->chunkById(500, function ($users) use (&$counts, $enforcement): void {
-                foreach ($users as $model) {
-                    $user = TwoFactorUser::tryFrom($model);
+        $tally = function ($model) use (&$counts, $enforcement): void {
+            $user = TwoFactorUser::tryFrom($model);
 
-                    if ($user === null) {
-                        continue;
-                    }
+            if ($user === null) {
+                return;
+            }
 
-                    if ($user->confirmedTwoFactorMethods()->isNotEmpty()) {
-                        $counts['enrolled']++;
+            if ($user->confirmedTwoFactorMethods()->isNotEmpty()) {
+                $counts['enrolled']++;
 
-                        continue;
-                    }
+                return;
+            }
 
-                    if (! $enforcement->appliesTo($user)) {
-                        $counts['optional']++;
+            if (! $enforcement->appliesTo($user)) {
+                $counts['optional']++;
 
-                        continue;
-                    }
+                return;
+            }
 
-                    $graceEndsAt = $enforcement->graceEndsAt($user);
+            $graceEndsAt = $enforcement->graceEndsAt($user);
 
-                    if ($graceEndsAt !== null && $graceEndsAt->isFuture()) {
-                        $counts['grace']++;
-                    } else {
-                        $counts['overdue']++;
-                    }
+            if ($graceEndsAt !== null && $graceEndsAt->isFuture()) {
+                $counts['grace']++;
+            } else {
+                $counts['overdue']++;
+            }
+        };
+
+        // Eager-loaded and chunked rather than loaded whole: this runs against
+        // the user table, which is the one table guaranteed to be large, and
+        // every row needs its confirmed methods.
+        $withMethods = static fn ($query) => $query->with([
+            'twoFactorMethods' => static fn ($methods) => $methods->whereNotNull('confirmed_at'),
+        ]);
+
+        if ($this->model !== null) {
+            $withMethods($this->model::query())->chunkById(500, static function ($users) use ($tally): void {
+                foreach ($users as $user) {
+                    $tally($user);
                 }
             });
+        } else {
+            AuditedModels::each($tally, $withMethods);
+        }
 
         return $this->result(array_filter($counts))
             ->label(fn (string $key): string => match ($key) {

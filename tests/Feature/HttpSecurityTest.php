@@ -99,11 +99,28 @@ it('will not let one user remove another user’s method', function (): void {
     expect($this->user->refresh()->hasTwoFactorEnabled())->toBeTrue();
 });
 
+/**
+ * A session that has cleared both gates the destructive routes now sit behind:
+ * a fresh password, and the second factor itself. The factor matters because
+ * these routes can hand out or destroy one, and the attacker they defend
+ * against is the one already holding the password.
+ *
+ * @return array<string, mixed>
+ */
+function confirmedAndVerified(User $user): array
+{
+    return [
+        'auth.password_confirmed_at' => time(),
+        'nova_two_factor.passed_at' => time(),
+        'nova_two_factor.user' => $user->getMorphClass().'|'.$user->getAuthIdentifier(),
+    ];
+}
+
 it('removes a method once the password is confirmed', function (): void {
     [$method] = enrolledTotp($this->user);
 
     $this->actingAs($this->user)
-        ->withSession(['auth.password_confirmed_at' => time()])
+        ->withSession(confirmedAndVerified($this->user))
         ->withHeaders(['Accept' => 'application/json'])
         ->json('DELETE', novaUrl("methods/{$method->id}"))
         ->assertOk();
@@ -117,7 +134,7 @@ it('refuses to remove the last factor while enforcement requires one', function 
     [$method] = enrolledTotp($this->user);
 
     $this->actingAs($this->user)
-        ->withSession(['auth.password_confirmed_at' => time()])
+        ->withSession(confirmedAndVerified($this->user))
         ->withHeaders(['Accept' => 'application/json'])
         ->json('DELETE', novaUrl("methods/{$method->id}"))
         ->assertStatus(422);
@@ -143,7 +160,7 @@ it('says plainly that existing codes cannot be retrieved', function (): void {
     enrolledTotp($this->user);
 
     $this->actingAs($this->user)
-        ->withSession(['auth.password_confirmed_at' => time()])
+        ->withSession(confirmedAndVerified($this->user))
         ->withHeaders(['Accept' => 'application/json'])
         ->json('GET', novaUrl('recovery-codes'))
         ->assertOk()
@@ -335,4 +352,223 @@ it('never exposes a secret through the methods listing', function (): void {
     foreach (['secret', 'credential_id_hash', 'code_hash'] as $forbidden) {
         expect($body)->not->toContain($forbidden);
     }
+});
+
+/*
+|--------------------------------------------------------------------------
+| Throttling speaks the application's language
+|--------------------------------------------------------------------------
+|
+| Laravel's `throttle` middleware aborts with the literal string
+| "Too Many Attempts." — untranslated, and silent about the two things a
+| locked-out user needs: how long the wait is, and that a second factor is not
+| the only way in. Every limiter here answers for itself instead.
+|
+*/
+it('answers a throttled request in the application\'s own words', function (): void {
+    config()->set('nova-two-factor.rate_limits.enroll', ['per_user' => 1, 'per_ip' => 99, 'decay' => 120]);
+    RateLimiter::clear('enroll|subject|'.$this->user->getAuthIdentifier().'@'.$this->user->getMorphClass());
+
+    $enrol = fn () => $this->actingAs($this->user)
+        ->postJson(novaUrl('methods'), ['type' => 'totp']);
+
+    $enrol();
+    $response = $enrol();
+
+    $response->assertStatus(429);
+
+    expect($response->json('message'))
+        ->not->toBe('Too Many Attempts.')
+        ->toContain('minutes');
+
+    // Rendered under the field the user was typing into, or it shows nowhere.
+    expect($response->json('errors.code.0'))->toBe($response->json('message'));
+    expect($response->json('retry_after'))->toBeGreaterThan(0);
+});
+
+/**
+ * "Use another method" is only true where another method exists. While
+ * enrolling, the budget is shared across factors, so telling a locked-out user
+ * to pick a different one sends them into the same wall.
+ */
+it('offers an alternative only where there is one', function (): void {
+    [$method] = enrolledTotp($this->user);
+
+    config()->set('nova-two-factor.rate_limits.enroll', ['per_user' => 1, 'per_ip' => 99, 'decay' => 120]);
+    config()->set('nova-two-factor.rate_limits.challenge', ['per_user' => 1, 'per_ip' => 99, 'decay' => 120]);
+    RateLimiter::clear('enroll|subject|'.$this->user->getAuthIdentifier().'@'.$this->user->getMorphClass());
+    RateLimiter::clear('challenge|subject|'.$this->user->getAuthIdentifier().'@'.$this->user->getMorphClass());
+
+    $enrol = fn () => $this->actingAs($this->user)->postJson(novaUrl('methods'), ['type' => 'email']);
+    $enrol();
+
+    expect($enrol()->json('message'))->not->toContain('use another method');
+
+    $challenge = fn () => $this->actingAs($this->user)
+        ->postJson(novaUrl('challenge'), ['method_id' => $method->id, 'code' => '000000']);
+    $challenge();
+
+    expect($challenge()->json('message'))->toContain('use another method');
+});
+
+/**
+ * A reset that leaves the throttle buckets standing has not reset anything the
+ * user can feel: the administrator is told it worked, and the user still meets
+ * "try again in 4:39" on the screen they were just sent to.
+ */
+it('clears the throttle buckets when an administrator resets a user', function (): void {
+    config()->set('nova-two-factor.rate_limits.enroll', ['per_user' => 1, 'per_ip' => 99, 'decay' => 600]);
+
+    $enrol = fn () => $this->actingAs($this->user)->postJson(novaUrl('methods'), ['type' => 'totp']);
+
+    $enrol();
+    $enrol()->assertStatus(429);
+
+    app(Gabrielesbaiz\NovaTwoFactor\Actions\ResetTwoFactor::class)($this->user, 'test');
+
+    // The reset also ends sessions that predate it, so the user signs in again
+    // — and lands on an enrollment screen that is no longer locked.
+    $this->flushSession();
+
+    $enrol()->assertSuccessful();
+});
+
+/**
+ * Wiping somebody's second factor while their browser keeps a verified session
+ * is half a revocation: the account stays open in whatever tab is already
+ * logged in, counted as having cleared a factor that no longer exists.
+ */
+it('ends sessions that predate an administrative reset', function (): void {
+    [$method] = enrolledTotp($this->user);
+
+    $this->actingAs($this->user)->get(novaUrl('methods'))->assertOk();
+
+    app(Gabrielesbaiz\NovaTwoFactor\Actions\ResetTwoFactor::class)($this->user, 'test');
+
+    $this->actingAs($this->user)
+        ->getJson(novaUrl('methods'))
+        ->assertStatus(401)
+        ->assertJson(['two_factor_reset' => true]);
+
+    // A session started after the reset is unaffected.
+    $this->flushSession();
+
+    $this->actingAs($this->user)->get(novaUrl('methods'))->assertOk();
+});
+
+/**
+ * The reset is the administrator's break-glass, so it has to clear the half of
+ * the limiter keyed on the address too — otherwise a user who spent the
+ * afternoon failing from their own office still meets the wall after being told
+ * they were reset.
+ */
+it('clears the address buckets an administrator cannot see', function (): void {
+    config()->set('nova-two-factor.rate_limits.enroll', ['per_user' => 99, 'per_ip' => 1, 'decay' => 600]);
+
+    $enrol = fn () => $this->actingAs($this->user)
+        ->withServerVariables(['REMOTE_ADDR' => '203.0.113.7'])
+        ->postJson(novaUrl('methods'), ['type' => 'totp']);
+
+    $enrol();
+    $enrol()->assertStatus(429);
+
+    // The audit trail is where the reset learns which addresses to clear.
+    app(Gabrielesbaiz\NovaTwoFactor\Actions\ResetTwoFactor::class)($this->user, 'test');
+    $this->flushSession();
+
+    $enrol()->assertSuccessful();
+});
+
+/**
+ * Confirming an enrollment *is* a challenge: possession of that exact factor
+ * was proved seconds ago. Sending the user straight to a second challenge for
+ * the same factor is a toll, not a control — and on the mandatory-enrollment
+ * path it is the first thing a new user meets.
+ */
+it('counts a confirmed enrollment as the session having passed', function (): void {
+    $driver = app(TotpDriver::class);
+    $intent = $driver->beginEnrollment($this->user);
+    $secret = (string) $intent->secret;
+
+    $this->actingAs($this->user)
+        ->postJson(novaUrl('methods/confirm'), [
+            'type' => 'totp',
+            'code' => (new Google2FA)->getCurrentOtp($secret),
+        ])
+        ->assertSuccessful();
+
+    // No second challenge for the factor just proved.
+    $this->actingAs($this->user)->get(novaUrl('methods'))->assertOk();
+});
+
+/**
+ * The hole behind "I logged out, logged back in, and went straight through".
+ *
+ * A flag that says only "this session passed" keeps saying it after the session
+ * changes hands. Two independent guards now: logout clears it, and the flag
+ * itself names the user it belongs to.
+ */
+it('does not carry a cleared factor across a logout', function (): void {
+    [$method] = enrolledTotp($this->user);
+
+    $session = new Gabrielesbaiz\NovaTwoFactor\Support\TwoFactorSession(app('session.store'));
+    $session->markPassed($method, $this->user);
+
+    expect($session->hasPassed($this->user))->toBeTrue();
+
+    event(new Illuminate\Auth\Events\Logout(config('nova.guard') ?: 'web', $this->user));
+
+    expect($session->hasPassed($this->user))->toBeFalse();
+});
+
+it('does not lend one user the verification of another', function (): void {
+    [$method] = enrolledTotp($this->user);
+
+    $other = User::factory()->create();
+
+    $session = new Gabrielesbaiz\NovaTwoFactor\Support\TwoFactorSession(app('session.store'));
+    $session->markPassed($method, $this->user);
+
+    expect($session->hasPassed($this->user))->toBeTrue()
+        ->and($session->hasPassed($other))->toBeFalse();
+});
+
+/**
+ * Middleware aliases belong to the host application. Depending on
+ * `password.confirm` meant an app on the Kernel layout that never registered it
+ * answered every destructive route with "Target class [password.confirm] does
+ * not exist" — a 500 where a password prompt belonged.
+ */
+it('guards destructive routes without depending on a host alias', function (): void {
+    $guarded = collect(Route::getRoutes())
+        ->filter(fn ($route): bool => str_contains((string) $route->getName(), 'nova-two-factor.'))
+        ->flatMap(fn ($route): array => $route->gatherMiddleware())
+        ->filter(fn ($middleware): bool => is_string($middleware) && str_contains($middleware, 'nova.password.confirm'))
+        ->values();
+
+    expect($guarded)->not->toBeEmpty();
+
+    $guarded->each(function (string $middleware): void {
+        expect($middleware)->toStartWith(Illuminate\Auth\Middleware\RequirePassword::class)
+            ->and($middleware)->not->toStartWith('password.confirm');
+    });
+});
+
+/**
+ * A verification must not outlive the sign-in it belongs to.
+ *
+ * Logout clears it; so does login, because the two ends are touched by
+ * different code in different applications and only one of them is ours.
+ */
+it('does not carry a cleared factor into a new sign-in', function (): void {
+    [$method] = enrolledTotp($this->user);
+
+    $session = new Gabrielesbaiz\NovaTwoFactor\Support\TwoFactorSession(app('session.store'));
+    $session->markPassed($method, $this->user);
+
+    expect($session->hasPassed($this->user))->toBeTrue();
+
+    event(new Illuminate\Auth\Events\Login(config('nova.guard') ?: 'web', $this->user, false));
+
+    expect($session->hasPassed($this->user))->toBeFalse();
 });

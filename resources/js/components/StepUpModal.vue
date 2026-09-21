@@ -2,7 +2,9 @@
   <Modal :show="show" role="alertdialog" size="sm" @close-via-escape="cancel">
     <form class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6" @submit.prevent="confirm()">
       <div class="flex items-start gap-3 mb-4">
-        <span class="w-9 h-9 rounded-lg grid place-items-center flex-none bg-red-100 dark:bg-red-900/40 text-red-600">
+        <span
+          class="w-9 h-9 rounded-lg grid place-items-center flex-none bg-red-100 dark:bg-red-900/40 text-red-600"
+        >
           <Icon name="lock-closed" type="micro" />
         </span>
         <div>
@@ -14,11 +16,18 @@
       </div>
 
       <div v-if="usesPasskey" class="text-center py-2">
-        <Button :loading="busy" @click="confirmWithPasskey">{{ __('Confirm with your passkey') }}</Button>
+        <Button :loading="busy" @click="confirmWithPasskey">{{
+          __('Confirm with your passkey')
+        }}</Button>
       </div>
 
       <div v-else>
-        <TwoFactorCodeInput v-model="code" :invalid="Boolean(error)" :readonly="busy" @complete="confirm" />
+        <TwoFactorCodeInput
+          v-model="code"
+          :invalid="Boolean(error)"
+          :readonly="busy"
+          @complete="confirm"
+        />
       </div>
 
       <HelpText v-if="error" class="mt-2 text-red-500" role="alert">{{ error }}</HelpText>
@@ -39,6 +48,7 @@ import { computed, onMounted, ref } from 'vue'
 import { Button, Icon } from 'laravel-nova-ui'
 import TwoFactorCodeInput from './TwoFactorCodeInput.vue'
 import { getCredential, describeError } from '../support/webauthn'
+import { __ } from '../support/translate'
 
 defineOptions({ name: 'NovaTwoFactorStepUpModal' })
 
@@ -67,7 +77,9 @@ const cancel = () => {
 }
 
 const post = (path, body) =>
-  Nova.request().post(Nova.url(`/two-factor/step-up${path}`), body).then(r => r.data)
+  Nova.request()
+    .post(Nova.url(`/${Nova.config('novaTwoFactor')?.prefix ?? 'two-factor'}/step-up${path}`), body)
+    .then((r) => r.data)
 
 const confirm = async (value) => {
   if (busy.value) return
@@ -108,7 +120,7 @@ const confirmWithPasskey = async () => {
 }
 
 onMounted(() => {
-  Nova.$on('nova-two-factor:step-up', payload => {
+  Nova.$on('nova-two-factor:step-up', (payload) => {
     scope.value = payload.scope
     factors.value = payload.factors ?? []
     methodId.value = payload.methodId ?? null

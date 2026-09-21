@@ -15,6 +15,7 @@ use Gabrielesbaiz\NovaTwoFactor\Exceptions\TwoFactorException;
 use Gabrielesbaiz\NovaTwoFactor\Http\Resources\MethodResource;
 use Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorMethod;
 use Gabrielesbaiz\NovaTwoFactor\Recovery\RecoveryCodeManager;
+use Gabrielesbaiz\NovaTwoFactor\Support\TwoFactorSession;
 use Gabrielesbaiz\NovaTwoFactor\TwoFactorManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,6 +66,9 @@ class MethodController extends Controller
         $validated = $request->validate([
             'type' => ['required', 'string'],
             'destination' => ['nullable', 'email', 'max:255'],
+            // A deliberate "I never got it", as opposed to simply arriving on
+            // the screen again — which must not burn the code already sent.
+            'resend' => ['nullable', 'boolean'],
         ]);
 
         $user = $this->novaUserOrFail();
@@ -109,6 +113,10 @@ class MethodController extends Controller
 
         abort_if($type === null, 422);
 
+        // Counted before the enrollment lands, because what it decides is
+        // whether this account had a factor a moment ago.
+        $hadFactor = $this->twoFactor->hasConfirmedMethods($user);
+
         try {
             $method = $this->twoFactor->driver($type)->completeEnrollment($user, $validated);
         } catch (TwoFactorException $exception) {
@@ -118,6 +126,26 @@ class MethodController extends Controller
         }
 
         event(new MethodConfirmed($user, $method));
+
+        // Confirming a *first* enrollment is a challenge: the user just proved
+        // possession of this exact factor, seconds ago, and had no other factor
+        // they could have been challenged on. Sending them straight to a second
+        // challenge for the same factor is a toll, not a control — and on the
+        // mandatory-enrollment path it is the first thing a new user meets.
+        //
+        // For an account that already had a factor this must never happen: it
+        // would let a session that never cleared the challenge mint itself a
+        // factor and walk in. That request cannot reach here any more —
+        // `RequireVerifiedSession` turns it away — and the condition below is
+        // the second lock on the same door, because a route list is one edit
+        // away from losing a middleware.
+        if ($request->hasSession() && ! $hadFactor) {
+            $session = new TwoFactorSession($request->session());
+
+            if (! $session->hasPassed($user)) {
+                $session->markPassed($method, $user);
+            }
+        }
 
         // First factor on the account: issue recovery codes in the same breath.
         // Someone with one factor and no backup is a lockout waiting to happen.
@@ -184,6 +212,7 @@ class MethodController extends Controller
             'no_destination' => __('No email address is available for this account.'),
             'attempts_exhausted' => __('Too many incorrect attempts. Request a new code.'),
             'expired' => __('That code has expired. Request a new one.'),
+            'superseded' => __('That code is no longer valid. Ask for a new one.'),
             default => __('That code is not correct.'),
         };
     }

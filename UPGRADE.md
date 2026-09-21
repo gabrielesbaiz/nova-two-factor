@@ -107,6 +107,19 @@ Every 1.x key is gone. `doctor` fails if a stale published config still has them
 | `user_model`, `user_table`, `user_id_column` | Removed. Polymorphic, so any number of authenticatable models work. |
 | `showin_sidebar`, `menu_text`, `menu_icon` | `nova.menu.*` |
 
+The admin pages also start **closed** in 2.0. `nova.admin_gate` defaults to
+`nova-two-factor:admin`, an ability your application almost certainly does not
+define — and an undefined ability denies, so the overview, settings, activity
+log and reset action are reachable by nobody and the menu entry does not appear
+until you define it:
+
+```php
+Gate::define('nova-two-factor:admin', fn ($user) => $user->isAdmin());
+```
+
+Set `nova.admin_gate` to `null` to keep 1.x's behaviour, where anyone who could
+reach Nova could read them.
+
 ## Code changes
 
 ```diff
@@ -134,7 +147,9 @@ exist, and Nova will fail to boot with them listed.
 
 ## After upgrading
 
-1. `php artisan nova-two-factor:doctor` — expect all passes.
+1. `php artisan nova-two-factor:doctor` — expect all passes, and read the
+   warnings: an undefined admin gate means the admin pages are closed, which is
+   the safe default rather than a fault.
 2. Sign in as a migrated user and confirm their authenticator still works.
 3. Tell users to generate recovery codes.
 4. Seriously consider `nova-two-factor:reset` for everyone, given the secret

@@ -19,6 +19,7 @@ use Gabrielesbaiz\NovaTwoFactor\WebAuthn\CeremonyStore;
 use Gabrielesbaiz\NovaTwoFactor\WebAuthn\WebAuthnService;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
 use Throwable;
 
@@ -94,10 +95,14 @@ class WebAuthnDriver implements TwoFactorMethodDriver
                 $this->rawResponse($input),
                 $this->webauthn->relyingParty()->id,
             );
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
             // A failed ceremony is a failed verification, never a 500 — and the
             // reason is deliberately not echoed back, since the library's
-            // messages describe our own configuration.
+            // messages describe our own configuration. It is logged instead:
+            // "that code is not correct" for a ceremony nobody typed a code
+            // into is otherwise impossible to debug from the outside.
+            $this->logCeremonyFailure('enrollment', $exception);
+
             throw InvalidCodeException::because(VerificationResult::INVALID_CODE);
         }
 
@@ -125,8 +130,12 @@ class WebAuthnDriver implements TwoFactorMethodDriver
     {
         $requireUv = $context->requiresUserVerification();
 
+        // Every passkey this account holds, not only the one the page happened
+        // to default to. Offering one meant a user with a laptop key and a
+        // security key had to guess which was selected before touching
+        // anything — and presenting the other simply failed.
         $options = $this->webauthn->requestOptions(
-            allowedCredentialIds: array_filter([$method->credential_id]),
+            allowedCredentialIds: $this->existingCredentialIds($context->user),
             requireUserVerification: $requireUv,
         );
 
@@ -146,6 +155,12 @@ class WebAuthnDriver implements TwoFactorMethodDriver
 
     public function verify(TwoFactorMethod $method, array $input, ChallengeContext $context): VerificationResult
     {
+        // The authenticator chooses which credential to sign with, so the one
+        // that answered may not be the row the page started from. Resolve it
+        // from the assertion before anything else, or a user with two passkeys
+        // is told the wrong one is invalid.
+        $method = $this->methodForAssertion($context, $input) ?? $method;
+
         if (! $method->isConfirmed()) {
             return VerificationResult::failed(VerificationResult::UNCONFIRMED_METHOD, $method);
         }
@@ -172,7 +187,9 @@ class WebAuthnDriver implements TwoFactorMethodDriver
                 $this->webauthn->relyingParty()->id,
                 $ceremony['user_handle'],
             );
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            $this->logCeremonyFailure('assertion', $exception, $method);
+
             return VerificationResult::failed(VerificationResult::INVALID_CODE, $method);
         }
 
@@ -201,7 +218,7 @@ class WebAuthnDriver implements TwoFactorMethodDriver
 
     public function suggestName(array $input = []): string
     {
-        return 'Passkey';
+        return $this->type()->label();
     }
 
     /**
@@ -226,6 +243,36 @@ class WebAuthnDriver implements TwoFactorMethodDriver
         }
 
         throw InvalidCodeException::because(VerificationResult::INVALID_CODE);
+    }
+
+    /**
+     * The enrolled passkey that produced this assertion.
+     *
+     * Matched on the credential id the authenticator returned, hashed the same
+     * way it is indexed. Scoped to the user's own confirmed credentials, so an
+     * id belonging to somebody else resolves to nothing rather than to them.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    protected function methodForAssertion(ChallengeContext $context, array $input): ?TwoFactorMethod
+    {
+        $credential = $input['credential'] ?? null;
+        $credential = is_string($credential) ? json_decode($credential, true) : $credential;
+
+        $id = is_array($credential) ? ($credential['rawId'] ?? $credential['id'] ?? null) : null;
+
+        if (! is_string($id) || $id === '') {
+            return null;
+        }
+
+        /** @var TwoFactorMethod|null $match */
+        $match = $context->user->twoFactorMethods()
+            ->ofType(MethodType::WebAuthn)
+            ->confirmed()
+            ->where('credential_id_hash', hash('sha256', $id))
+            ->first();
+
+        return $match;
     }
 
     /**
@@ -278,5 +325,26 @@ class WebAuthnDriver implements TwoFactorMethodDriver
         $email = $user->email ?? null;
 
         return is_string($email) && $email !== '' ? $email : (string) $user->getAuthIdentifier();
+    }
+
+    /**
+     * Record why a ceremony was refused.
+     *
+     * The user is told only "that is not correct", because the library's
+     * messages describe *our* relying party, origins and challenge state — but
+     * an administrator staring at a passkey that enrolls and then refuses to
+     * log in has nothing to go on without this. Warning level: it is an
+     * authentication failure, not a crash, and it carries no credential data.
+     */
+    protected function logCeremonyFailure(string $stage, Throwable $exception, ?TwoFactorMethod $method = null): void
+    {
+        Log::warning('nova-two-factor: WebAuthn '.$stage.' refused.', [
+            'reason' => $exception->getMessage(),
+            'exception' => $exception::class,
+            'relying_party' => Config::get('nova-two-factor.methods.webauthn.relying_party.id'),
+            'origins' => Config::get('nova-two-factor.methods.webauthn.origins'),
+            'app_url' => Config::get('app.url'),
+            'method_id' => $method?->getKey(),
+        ]);
     }
 }

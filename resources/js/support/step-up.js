@@ -11,8 +11,8 @@ export function installStepUpInterceptor(Nova) {
   const client = Nova.request()
 
   client.interceptors.response.use(
-    response => response,
-    error => {
+    (response) => response,
+    (error) => {
       const { response, config } = error
 
       if (response?.status !== 423 || !response.data?.step_up_required) {
@@ -35,6 +35,6 @@ export function installStepUpInterceptor(Nova) {
           onCancelled: () => reject(error),
         })
       })
-    }
+    },
   )
 }

@@ -1,1 +1,7 @@
-github: Gabriele Sbaiz
+# Shown as the "Sponsor" button on the repository page.
+github: gabrielesbaiz
+
+# Other platforms GitHub understands, if you ever add them:
+# custom: ["https://…"]
+# ko_fi: …
+# open_collective: …

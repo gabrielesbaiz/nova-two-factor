@@ -8,8 +8,13 @@ use Gabrielesbaiz\NovaTwoFactor\Auth\SupersedeFortifyTwoFactorChallenge;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireFreshTwoFactor;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactor;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactorEnrollment;
+use Gabrielesbaiz\NovaTwoFactor\Nova\Dashboards\TwoFactorCompliance;
+use Gabrielesbaiz\NovaTwoFactor\Nova\Dashboards\TwoFactorSettings;
+use Gabrielesbaiz\NovaTwoFactor\Nova\Resources\TwoFactorAuditLog;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable;
@@ -24,14 +29,65 @@ class ToolServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        // Nova's SPA reads its strings from `Nova.config('translations')`, which
+        // is Nova's own bag — a package's `lang/*.json` never reaches it. Without
+        // this the Blade screens were Italian while the security card, rendered
+        // by the same package three lines away, stayed English.
+        $this->registerTranslations();
+
         if (! $this->novaIsInstalled()) {
             return;
         }
 
+        // And again while Nova is serving, because the call above runs during
+        // boot — before any middleware, and therefore before an application
+        // that picks the locale per request (from the user, the session or the
+        // URL) has picked it. Registered at boot alone, the catalogue is
+        // whatever `config('app.locale')` says, and a host running an English
+        // default with Italian users shipped an English SPA while its Blade
+        // screens, translated at render time, came out Italian.
+        Nova::serving(fn () => $this->registerTranslations());
+
         $this->registerMiddlewareAlias();
         $this->registerMiddleware();
         $this->registerRoutes();
+        $this->registerDashboards();
         $this->supersedeFortifyChallenge();
+    }
+
+    /**
+     * Register the compliance dashboard with Nova.
+     *
+     * Done here rather than asking the host to add it to
+     * `NovaServiceProvider::dashboards()`: the dashboard is the destination of
+     * the menu entry this package registers, and an entry that 404s unless the
+     * host wired a second thing is a trap.
+     *
+     * `Nova::dashboards()` merges, so a host listing it themselves is harmless
+     * — Nova matches on `uriKey()` and the first match wins.
+     */
+    protected function registerDashboards(): void
+    {
+        if (! Config::get('nova-two-factor.enabled', true)) {
+            return;
+        }
+
+        if (! Config::get('nova-two-factor.nova.compliance.enabled', true)) {
+            return;
+        }
+
+        $dashboards = [new TwoFactorCompliance];
+
+        // The settings page is registered even where editing is off: it renders
+        // read-only and says where each value comes from, which is useful on a
+        // panel whose policy lives entirely in someone else's `.env`.
+        $dashboards[] = new TwoFactorSettings;
+
+        Nova::dashboards($dashboards);
+
+        // Hidden from navigation: it is reached from the settings preview and
+        // from the compliance page, where the question that leads to it occurs.
+        Nova::resources([TwoFactorAuditLog::class]);
     }
 
     /**
@@ -212,5 +268,49 @@ class ToolServiceProvider extends ServiceProvider
             ->middleware(['nova', Authenticate::class])
             ->prefix(Nova::path())
             ->group(__DIR__.'/../routes/nova.php');
+    }
+
+    /**
+     * Hand Nova the package's own catalogue for the active locale.
+     *
+     * The application's `lang/vendor/nova-two-factor/{locale}.json` wins when it
+     * exists, so an override published by the host is what the SPA sees — the
+     * same precedence Laravel applies to the PHP side.
+     */
+    protected function registerTranslations(): void
+    {
+        $locale = App::getLocale();
+
+        // Merged, not chosen. Preferring the published file meant a host that
+        // had ever run `vendor:publish` froze the catalogue at that moment:
+        // every string added since read back as its English key, in a UI whose
+        // other half was translated. The package supplies the floor, the
+        // application's own file overrides it key by key.
+        $translations = array_merge(
+            $this->readTranslations(__DIR__.'/../resources/lang/'.$locale.'.json'),
+            $this->readTranslations(lang_path('vendor/nova-two-factor/'.$locale.'.json')),
+        );
+
+        if ($translations !== []) {
+            Nova::translations($translations);
+        }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function readTranslations(string $path): array
+    {
+        if (! is_readable($path)) {
+            return [];
+        }
+
+        // `File::json`, not `file_get_contents`: the architecture test forbids
+        // the latter package-wide, because the thing it most easily becomes is
+        // a fetch of a remote URL — which is how 1.x ended up posting TOTP
+        // secrets to a third-party QR service.
+        $decoded = rescue(fn (): array => File::json($path), [], report: false);
+
+        return is_array($decoded) ? $decoded : [];
     }
 }

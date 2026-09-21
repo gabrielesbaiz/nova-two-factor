@@ -22,7 +22,7 @@ export function useCountdown({ announceAt = [300, 60, 30, 0] } = {}) {
     handle = null
   }
 
-  const start = seconds => {
+  const start = (seconds) => {
     stop()
     remaining.value = Math.max(0, Math.floor(seconds))
 

@@ -132,3 +132,42 @@ it('allows an audit context with no secret-shaped keys', function (): void {
     // inspected, or every legitimate recovery event would throw.
     expect(fn () => $audit->save())->not->toThrow(LogicException::class);
 });
+
+/**
+ * The factor names reach the enforcement screen, the challenge chooser, the
+ * security card, the audit log and three notifications. Returned as literals
+ * from the enum, they were the one part of a fully translated page that stayed
+ * in English.
+ */
+it('translates the factor names', function (): void {
+    app()->setLocale('it');
+
+    expect(MethodType::Totp->label())->toBe('App di autenticazione')
+        ->and(MethodType::Email->label())->toBe('Codice via email');
+
+    app()->setLocale('en');
+
+    expect(MethodType::Totp->label())->toBe('Authenticator app');
+});
+
+/**
+ * The published config is republished with `--force` on every package update in
+ * at least one real deployment, so anything an environment needs to tune has to
+ * survive that — which means reading from the environment, not from an edit to
+ * the file.
+ */
+it('reads every tunable knob from the environment', function (): void {
+    $config = file_get_contents(__DIR__.'/../../config/nova-two-factor.php');
+
+    $tunable = [
+        "'grace_days'", "'gate'", "'admin_gate'", "'show_method_tradeoffs'",
+        "'password_confirmation_ttl'", "'resend_after'",
+        "'per_user' => env('NOVA_TWO_FACTOR_LIMIT_ENROLL'",
+    ];
+
+    foreach ($tunable as $needle) {
+        $line = collect(explode("\n", $config))->first(fn (string $l): bool => str_contains($l, $needle));
+
+        expect($line)->toBeString()->toContain('env(');
+    }
+});

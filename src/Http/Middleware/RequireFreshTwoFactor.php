@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Gabrielesbaiz\NovaTwoFactor\Http\Middleware;
 
 use Closure;
+use Gabrielesbaiz\NovaTwoFactor\Settings\Pause;
 use Gabrielesbaiz\NovaTwoFactor\StepUp\StepUpManager;
 use Gabrielesbaiz\NovaTwoFactor\Support\Routing;
 use Gabrielesbaiz\NovaTwoFactor\TwoFactorManager;
@@ -29,6 +30,12 @@ class RequireFreshTwoFactor
     public function handle(Request $request, Closure $next, ?string $scope = null): Response
     {
         if (! Config::get('nova-two-factor.enabled', true)) {
+            return $next($request);
+        }
+
+        // Paused means paused: a step-up prompt during a pause would ask for a
+        // factor the pause exists because nobody can produce.
+        if (app(Pause::class)->active()) {
             return $next($request);
         }
 

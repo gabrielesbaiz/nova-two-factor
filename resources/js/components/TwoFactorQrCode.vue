@@ -3,7 +3,11 @@
     <!-- The plate stays white in both themes on purpose: scanners need the
          contrast, and a themed QR that inverts in dark mode will not scan.
          Fixed dimensions so the layout never jumps as the SVG arrives. -->
-    <div class="n2f-qr" role="img" :aria-label="__('QR code for setting up your authenticator app')">
+    <div
+      class="n2f-qr"
+      role="img"
+      :aria-label="__('QR code for setting up your authenticator app')"
+    >
       <div v-if="svg" v-html="svg" />
       <Loader v-else class="text-gray-300" />
     </div>
@@ -39,6 +43,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { __ } from '../support/translate'
 
 defineOptions({ name: 'TwoFactorQrCode' })
 

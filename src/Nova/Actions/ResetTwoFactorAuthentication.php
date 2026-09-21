@@ -5,14 +5,19 @@ declare(strict_types=1);
 namespace Gabrielesbaiz\NovaTwoFactor\Nova\Actions;
 
 use Gabrielesbaiz\NovaTwoFactor\Actions\ResetTwoFactor;
+use Gabrielesbaiz\NovaTwoFactor\Notifications\TwoFactorResetNotification;
+use Gabrielesbaiz\NovaTwoFactor\Support\Enforcement;
+use Gabrielesbaiz\NovaTwoFactor\Support\PanelUrl;
 use Gabrielesbaiz\NovaTwoFactor\Support\TwoFactorUser;
 use Illuminate\Bus\Queueable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Notification;
 use Laravel\Nova\Actions\Action;
 use Laravel\Nova\Actions\ActionResponse;
 use Laravel\Nova\Fields\ActionFields;
+use Laravel\Nova\Fields\Boolean;
 use Laravel\Nova\Fields\Textarea;
 use Laravel\Nova\Http\Requests\NovaRequest;
 use Laravel\Nova\Nova;
@@ -67,8 +72,20 @@ class ResetTwoFactorAuthentication extends Action
 
         $reason = (string) $fields->get('reason');
 
+        $notify = $fields->get('notify');
+        $panelUrl = PanelUrl::userSecurity();
+        $mandatory = app(Enforcement::class)->mode()->blocks();
+
         foreach ($models as $model) {
             $reset(TwoFactorUser::assert($model), $reason, $actor);
+
+            // Opt-in, and unticked by default: a reset is often part of a
+            // support call the user is already on, where a mail arriving
+            // mid-conversation is noise. Where it is wanted, it is also how
+            // somebody notices a reset they did not ask for.
+            if ($notify && $model->getAttribute('email')) {
+                Notification::send($model, new TwoFactorResetNotification($panelUrl, $mandatory));
+            }
         }
 
         return ActionResponse::message(
@@ -89,6 +106,10 @@ class ResetTwoFactorAuthentication extends Action
             Textarea::make(__('Reason'), 'reason')
                 ->rules('required', 'string', 'min:5', 'max:500')
                 ->help(__('Recorded in the audit log against your account.')),
+
+            Boolean::make(__('Tell the user by email'), 'notify')
+                ->default(false)
+                ->help(__('Explains what was removed and how to set it up again. It does not include your reason.')),
         ];
     }
 }

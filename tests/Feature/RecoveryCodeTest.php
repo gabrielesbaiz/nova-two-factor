@@ -157,3 +157,46 @@ it('rejects an empty submission without touching the database', function (): voi
         ->and($this->codes->consume($this->user, '   -   ')->failure)->toBe(VerificationResult::INVALID_CODE)
         ->and($this->codes->unusedCount($this->user))->toBe(8);
 });
+
+it('generates codes with the entropy that lets them be stored unkeyed', function (): void {
+    // The whole reason these are a plain SHA-256 rather than an HMAC: twenty
+    // base62 characters is beyond search whatever you hash it with. Pinned,
+    // because the argument is only as good as the length.
+    $user = User::factory()->create();
+
+    $codes = app(RecoveryCodeManager::class)->regenerate($user);
+
+    foreach ($codes as $code) {
+        $bare = str_replace('-', '', $code);
+
+        expect(mb_strlen($bare))->toBe(20)
+            ->and($bare)->toMatch('/^[A-Za-z0-9]{20}$/');
+    }
+
+    // And no two the same, which a broken generator would give away here first.
+    expect($codes->unique()->count())->toBe($codes->count());
+});
+
+it('reports the entropy in the doctor', function (): void {
+    $this->artisan('nova-two-factor:doctor')
+        ->expectsOutputToContain('~119 bits')
+        ->assertSuccessful();
+});
+
+it('warns in the doctor when the codes are shortened', function (): void {
+    config()->set('nova-two-factor.recovery_codes.length', 6);
+
+    $this->artisan('nova-two-factor:doctor')
+        ->expectsOutputToContain('Stored unkeyed')
+        ->assertSuccessful();
+});
+
+it('warns in the doctor when the configured length is below the floor', function (): void {
+    // Silently ignored by the generator, which is the sort of setting that
+    // reads as done and is not.
+    config()->set('nova-two-factor.recovery_codes.length', 4);
+
+    $this->artisan('nova-two-factor:doctor')
+        ->expectsOutputToContain('below the floor')
+        ->assertSuccessful();
+});

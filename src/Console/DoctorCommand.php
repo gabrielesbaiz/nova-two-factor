@@ -7,11 +7,15 @@ namespace Gabrielesbaiz\NovaTwoFactor\Console;
 use Gabrielesbaiz\NovaTwoFactor\Auth\SupersedeFortifyTwoFactorChallenge;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactor;
 use Gabrielesbaiz\NovaTwoFactor\Http\Middleware\RequireTwoFactorEnrollment;
+use Gabrielesbaiz\NovaTwoFactor\Support\Enforcement;
 use Gabrielesbaiz\NovaTwoFactor\WebAuthn\RelyingParty;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable;
+use Laravel\Fortify\Features;
 use Throwable;
 
 /**
@@ -52,9 +56,14 @@ class DoctorCommand extends Command
         $this->checkTables();
         $this->checkMiddleware();
         $this->checkFortifyChallenge();
+        $this->checkUserSecurityPage();
         $this->checkMethods();
+        $this->checkRecoveryCodes();
         $this->checkWebAuthn();
         $this->checkEnforcement();
+        $this->checkExceptPatterns();
+        $this->checkAdminAccess();
+        $this->checkCookieSecurity();
         $this->checkLegacyConfig();
         $this->checkAssets();
 
@@ -222,6 +231,32 @@ class DoctorCommand extends Command
             );
     }
 
+    /**
+     * The management UI has no page of its own.
+     *
+     * It replaces Nova's globally registered `UserSecurityTwoFactorAuthentication`
+     * component on Nova's own `/user-security` page — which Nova only routes when
+     * `Features::hasSecurityFeatures()` is true. With every Nova Fortify feature
+     * off, that route does not exist: the security card never renders, and the
+     * enforcement screen's "set this up" links lead nowhere.
+     */
+    protected function checkUserSecurityPage(): void
+    {
+        if (Route::has('nova.pages.user-security')) {
+            $this->ok('Nova user-security page', 'Routed — the security card has somewhere to render.');
+
+            return;
+        }
+
+        $this->problem(
+            'Nova user-security page',
+            Features::hasSecurityFeatures()
+                ? 'Not routed, although Fortify reports security features. Check that Nova::fortify() runs before routes are registered.'
+                : 'Not routed: no Nova Fortify security feature is enabled, so Nova never registers /user-security. '
+                    .'Enable at least one in NovaServiceProvider, e.g. Nova::fortify()->features([Features::updatePasswords()]).',
+        );
+    }
+
     protected function checkMethods(): void
     {
         $enabled = collect(['totp', 'webauthn', 'email'])
@@ -238,6 +273,49 @@ class DoctorCommand extends Command
         if (! $enabled->contains('webauthn') && ! $enabled->contains('totp')) {
             $this->caution('Method strength', 'Only email codes are enabled — the weakest option, and phishable.');
         }
+    }
+
+    /**
+     * The entropy that lets recovery codes be stored unkeyed.
+     *
+     * Every other secret here is keyed on `APP_KEY`; these are a plain
+     * SHA-256, on the argument that twenty base62 characters is beyond search
+     * whatever you hash them with. That argument is only as good as the length,
+     * so the length is checked rather than assumed.
+     */
+    protected function checkRecoveryCodes(): void
+    {
+        $configured = (int) Config::get('nova-two-factor.recovery_codes.length', 10);
+
+        // What the generator will actually use: it floors at 6 per half, so a
+        // smaller number in config is a misconfiguration that silently does
+        // nothing rather than a weaker code.
+        $effective = max(6, $configured);
+
+        // base62, two halves.
+        $bits = (int) floor($effective * 2 * log(62, 2));
+
+        if ($configured < 6) {
+            $this->caution('Recovery codes', sprintf(
+                'recovery_codes.length is %d, below the floor of 6; %d is used instead. Set it to 6 or more so the config says what happens.',
+                $configured,
+                $effective,
+            ));
+
+            return;
+        }
+
+        if ($bits < 96) {
+            $this->caution('Recovery codes', sprintf(
+                'recovery_codes.length %d gives ~%d bits per code. Stored unkeyed, so keep this at the default of 10 (~119 bits) unless you have a reason.',
+                $configured,
+                $bits,
+            ));
+
+            return;
+        }
+
+        $this->ok('Recovery codes', sprintf('%d per code, ~%d bits.', $effective * 2, $bits));
     }
 
     protected function checkWebAuthn(): void
@@ -283,6 +361,194 @@ class DoctorCommand extends Command
         }
     }
 
+    /**
+     * Who can read the compliance figures, and who can change the policy.
+     *
+     * Both surfaces fall back to "any authenticated Nova user" when no gate is
+     * named. That is a deliberate default for a single-administrator panel, and
+     * the wrong one everywhere else — in most applications everyone on staff
+     * can reach Nova, and the settings page can then be used to stand
+     * two-factor authentication down.
+     */
+    /**
+     * What enforcement is told to leave alone.
+     *
+     * The one setting here with no symptom when it is wrong. A pattern that is
+     * too broad does not error, does not log and does not break the login
+     * flow — it simply means requests that should have been stopped are not,
+     * and the check above, which reports the middleware as registered, makes
+     * that read as healthy.
+     *
+     * So this does two things: prints what the middleware actually matches on,
+     * because there is otherwise no way to see it, and refuses the patterns
+     * that void the control rather than widen it.
+     */
+    protected function checkExceptPatterns(): void
+    {
+        $effective = app(Enforcement::class)->exceptPatterns();
+
+        $configured = Config::get('nova-two-factor.enforcement.except', []);
+        $configured = is_array($configured) ? array_map('strval', $configured) : [];
+
+        // Judged by consequence, not by spelling: `*`, `nova*` and `nova-api/*`
+        // are three different mistakes with one outcome, and listing syntax to
+        // ban would only ever be a list of the forms somebody thought of.
+        $mustStayGated = $this->pathsThatMustStayGated();
+
+        $voided = [];
+
+        foreach ($effective as $pattern) {
+            foreach ($mustStayGated as $label => $path) {
+                if (Str::is($pattern, $path)) {
+                    $voided[$pattern][] = $label;
+                }
+            }
+        }
+
+        if ($voided !== []) {
+            foreach ($voided as $pattern => $labels) {
+                $this->problem(
+                    'Enforcement exceptions',
+                    sprintf(
+                        'Pattern [%s] leaves %s unguarded, so enforcement does not apply there.',
+                        $pattern,
+                        implode(' and ', array_unique($labels)),
+                    ),
+                );
+            }
+
+            return;
+        }
+
+        $this->ok('Enforcement exceptions', sprintf(
+            '%d patterns, %d of them yours.',
+            count($effective),
+            count($configured),
+        ));
+
+        // Printed rather than summarised: the point of the check is that nobody
+        // can otherwise see this list, and a count is not seeing it.
+        if ($configured !== []) {
+            $this->newLine();
+            $this->components->info('Enforcement leaves these open, by your configuration:');
+
+            foreach ($configured as $pattern) {
+                $this->line('  - '.$pattern);
+            }
+        }
+    }
+
+    /**
+     * Paths where enforcement must always apply, whatever the list says.
+     *
+     * The dashboard itself, because reaching it is the thing being gated, and
+     * the API behind it, because guarding pages while leaving `nova-api/*` open
+     * is exactly how 1.x could be sidestepped.
+     *
+     * @return array<string, string>
+     */
+    protected function pathsThatMustStayGated(): array
+    {
+        $novaPath = trim((string) Config::get('nova.path', '/nova'), '/');
+        $prefix = $novaPath === '' ? '' : $novaPath.'/';
+
+        return [
+            'the dashboard' => $novaPath === '' ? '/' : $novaPath,
+            'resource pages' => $prefix.'resources/users',
+            'the Nova API' => 'nova-api/users',
+        ];
+    }
+
+    protected function checkAdminAccess(): void
+    {
+        $gate = Config::get('nova-two-factor.nova.admin_gate');
+        $named = is_string($gate) && $gate !== '';
+        $editable = (bool) Config::get('nova-two-factor.settings.editable', false);
+
+        if ($named && ! app('Illuminate\Contracts\Auth\Access\Gate')->has($gate)) {
+            // The shipped default, and the state a fresh install is in: the
+            // ability does not exist, `Gate::allows()` denies, and the admin
+            // pages stay closed. Not a failure — closed is the safe end, and
+            // enrollment and the challenge work regardless — but it does need
+            // saying, because the menu entry simply will not appear.
+            $this->caution('Admin gate', sprintf(
+                'Gate [%s] is not defined, so the admin pages are closed to everyone. Define it with Gate::define, or set nova.admin_gate to null to open them to every Nova user.',
+                $gate,
+            ));
+
+            return;
+        }
+
+        if ($named) {
+            $this->ok('Admin gate', "Compliance and settings are gated on [{$gate}].");
+
+            return;
+        }
+
+        if ($editable) {
+            $this->problem(
+                'Admin gate',
+                'nova-two-factor.settings.editable is on with no nova.admin_gate, so any user who can reach Nova can weaken or pause two-factor policy.',
+            );
+
+            return;
+        }
+
+        $this->caution(
+            'Admin gate',
+            'No nova.admin_gate: every authenticated Nova user can read the compliance dashboard and the activity log.',
+        );
+    }
+
+    /**
+     * Whether the trusted-device cookie can leave without `Secure`.
+     *
+     * The one that fails silently: behind a proxy terminating TLS, PHP is
+     * spoken to over plain HTTP, and `$request->isSecure()` is false unless
+     * `TrustProxies` was configured. The cookie then travels on any `http://`
+     * request to the host — and it is a thirty-day skip past the challenge, so
+     * anyone who intercepts it replays it. Encryption is no help: possession is
+     * the whole credential.
+     */
+    protected function checkCookieSecurity(): void
+    {
+        $url = (string) Config::get('app.url');
+        $https = str_starts_with(mb_strtolower($url), 'https://');
+
+        $configured = Config::get('nova-two-factor.cookies.secure');
+        $session = Config::get('session.secure');
+
+        if ($configured !== null) {
+            $configured
+                ? $this->ok('Cookie security', 'nova-two-factor.cookies.secure is on.')
+                : $this->caution('Cookie security', 'nova-two-factor.cookies.secure is off: two-factor cookies will travel over plain HTTP.');
+
+            return;
+        }
+
+        if ($session !== null && (bool) $session) {
+            $this->ok('Cookie security', 'Following session.secure, which is on.');
+
+            return;
+        }
+
+        if (! $https) {
+            // Local development over http is the ordinary case, not a finding.
+            $this->ok('Cookie security', 'app.url is not https; nothing to enforce.');
+
+            return;
+        }
+
+        // A warning, not a failure: with TrustProxies configured the request is
+        // seen as secure and the cookie is fine. What cannot be checked from
+        // here is whether that configuration exists, and the failure is silent
+        // — hence saying so rather than guessing either way.
+        $this->caution(
+            'Cookie security',
+            'app.url is https but neither session.secure nor nova-two-factor.cookies.secure is set: behind a proxy without TrustProxies the trusted-device cookie ships without Secure. Set SESSION_SECURE_COOKIE=true to settle it.',
+        );
+    }
+
     protected function checkLegacyConfig(): void
     {
         $removed = array_filter([
@@ -315,5 +581,53 @@ class DoctorCommand extends Command
         file_exists(__DIR__.'/../../dist/js/tool.js')
             ? $this->ok('Compiled assets', 'Present.')
             : $this->problem('Compiled assets', 'dist/js/tool.js is missing. Run `npm ci && npm run build`.');
+
+        $this->checkPublishedAssets();
+    }
+
+    /**
+     * The pre-auth bundle is a *copy* under `public/`.
+     *
+     * Nova serves the in-SPA bundle straight from the package, but the
+     * challenge, step-up and enforcement pages load a published file. Nothing
+     * re-copies it on `composer update`, so a fixed bundle can sit in the
+     * package while the browser is still served last month's — a fix that
+     * appears not to have worked, with no error anywhere to say why.
+     */
+    protected function checkPublishedAssets(): void
+    {
+        $copies = [
+            'js/challenge.js' => __DIR__.'/../../dist/js/challenge.js',
+            'css/tool.css' => __DIR__.'/../../dist/css/tool.css',
+        ];
+
+        foreach ($copies as $path => $source) {
+            $published = public_path('vendor/nova-two-factor/'.$path);
+
+            if (! file_exists($published)) {
+                // Absent is a warning: the pre-auth pages degrade to a plain
+                // form post and still work. Stale is a failure, because the
+                // page looks fine and behaves like an older version.
+                $this->caution(
+                    'Published asset '.$path,
+                    'Missing — the pre-auth pages lose the code input, passkeys and the countdown. '
+                        .'Run `php artisan vendor:publish --tag=nova-two-factor-assets --force`.',
+                );
+
+                continue;
+            }
+
+            if (! file_exists($source) || hash_file('xxh128', $published) === hash_file('xxh128', $source)) {
+                $this->ok('Published asset '.$path, 'Up to date.');
+
+                continue;
+            }
+
+            $this->problem(
+                'Published asset '.$path,
+                'Stale — the copy in public/ differs from the one shipped with this version. '
+                    .'Run `php artisan vendor:publish --tag=nova-two-factor-assets --force`.',
+            );
+        }
     }
 }

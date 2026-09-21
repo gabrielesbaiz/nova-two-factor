@@ -180,11 +180,22 @@ class WebAuthnService
     /**
      * @param  array<string, mixed>  $data
      */
-    public function deserializeCredential(array $data): PublicKeyCredentialSource
+    /**
+     * Rebuild a stored credential.
+     *
+     * Typed to `CredentialRecord`, not `PublicKeyCredentialSource`: the
+     * library's denormaliser hands back the parent, and the narrower return
+     * type turned every passkey login into a `TypeError` — caught one frame
+     * later and reported to the user as "that code is not correct", for a
+     * ceremony where no code was typed. `check()` wants the parent anyway.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function deserializeCredential(array $data): CredentialRecord
     {
         return $this->serializer()->deserialize(
             json_encode($data, JSON_THROW_ON_ERROR),
-            PublicKeyCredentialSource::class,
+            CredentialRecord::class,
             'json',
         );
     }

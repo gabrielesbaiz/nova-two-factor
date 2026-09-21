@@ -15,14 +15,18 @@ export function mountOtpInput(root, { onComplete } = {}) {
 
   let armed = true
 
-  const sanitize = value => (value || '').replace(/\D/g, '').slice(0, length)
+  const sanitize = (value) => (value || '').replace(/\D/g, '').slice(0, length)
 
   const paint = () => {
     const value = input.value
     boxes.forEach((box, index) => {
       box.textContent = value[index] ?? ''
       box.dataset.filled = String(index < value.length)
-      box.dataset.active = String(index === Math.min(value.length, length - 1) && value.length < length)
+      box.dataset.active = String(
+        group.dataset.focused === 'true' &&
+          index === Math.min(value.length, length - 1) &&
+          value.length < length,
+      )
     })
   }
 
@@ -44,6 +48,27 @@ export function mountOtpInput(root, { onComplete } = {}) {
     group.dataset.state = 'valid'
   }
 
+  // The caret is drawn on a decorative box while the real input sits invisible
+  // on top. Without tracking focus the boxes kept blinking after a click
+  // elsewhere on the page — a field advertising that it is ready to take keys
+  // that were going nowhere.
+  const setFocused = (focused) => {
+    group.dataset.focused = String(focused)
+    paint()
+  }
+
+  input.addEventListener('focus', () => setFocused(true))
+  input.addEventListener('blur', () => setFocused(false))
+  setFocused(document.activeElement === input)
+
+  // Anywhere on the group is a hit target for the field it decorates.
+  group.addEventListener('pointerdown', (event) => {
+    if (event.target === input) return
+
+    event.preventDefault()
+    input.focus()
+  })
+
   input.addEventListener('input', () => {
     const before = input.value
     input.value = sanitize(before)
@@ -62,7 +87,7 @@ export function mountOtpInput(root, { onComplete } = {}) {
   })
 
   // Paste anywhere in the field: "123 456" and "Your code is 123456" both work.
-  input.addEventListener('paste', event => {
+  input.addEventListener('paste', (event) => {
     event.preventDefault()
     const text = (event.clipboardData || window.clipboardData)?.getData('text') ?? ''
     input.value = sanitize(text)
@@ -73,5 +98,15 @@ export function mountOtpInput(root, { onComplete } = {}) {
 
   paint()
 
-  return { input, group, clear, markInvalid, markValid, paint, get value() { return input.value } }
+  return {
+    input,
+    group,
+    clear,
+    markInvalid,
+    markValid,
+    paint,
+    get value() {
+      return input.value
+    },
+  }
 }

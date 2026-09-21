@@ -22,6 +22,8 @@ class ResetCommand extends Command
     protected $signature = 'nova-two-factor:reset
         {user : Email address or primary key}
         {--guard= : Auth guard whose provider model to search}
+        {--ip=* : Extra addresses whose rate-limit buckets to clear}
+        {--force : Skip the confirmation prompt}
         {--reason=Reset from the command line : Recorded in the audit log}';
 
     protected $description = 'Remove every two-factor method for a user so they can enrol again';
@@ -54,13 +56,20 @@ class ResetCommand extends Command
             $user->email ?? $user->getKey(),
         ));
 
-        if (! $this->confirm('Continue?', false)) {
+        // `--force` for scripts and for an administrator already sure enough to
+        // have typed the address; the prompt stays the default, because this
+        // wipes somebody else's security settings.
+        if (! $this->option('force') && ! $this->confirm('Continue?', false)) {
             return self::SUCCESS;
         }
 
-        $reset(TwoFactorUser::assert($user), (string) $this->option('reason'));
+        $reset(
+            TwoFactorUser::assert($user),
+            (string) $this->option('reason'),
+            extraAddresses: (array) $this->option('ip'),
+        );
 
-        $this->components->info('Two-factor authentication reset. The user can enrol again at their next sign-in.');
+        $this->components->info('Two-factor authentication reset. Methods, recovery codes, trusted devices, rate-limit lockouts, sessions and any enrollment reminder snooze are cleared; the user can enrol again at their next sign-in.');
 
         return self::SUCCESS;
     }

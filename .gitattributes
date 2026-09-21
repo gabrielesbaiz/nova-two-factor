@@ -8,6 +8,12 @@
 /.github                export-ignore
 /.gitignore             export-ignore
 /.prettierrc            export-ignore
+# The logo ships — the README shows it, and a dist tarball whose README
+# renders a broken image is what people see on Packagist. The 3.3 MB of
+# screenshots does not: only SCREENSHOTS.md references them, and that file
+# is itself export-ignored.
+/art/screenshots        export-ignore
+/SCREENSHOTS.md         export-ignore
 /package.json           export-ignore
 /package-lock.json      export-ignore
 /phpstan.neon.dist      export-ignore

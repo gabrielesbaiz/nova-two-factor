@@ -100,6 +100,21 @@ class RecoveryCodeManager
         return VerificationResult::passed();
     }
 
+    /**
+     * Whether this looks like a code off the card, whatever it turns out to be.
+     *
+     * Not a security check — a well-formed guess is still a guess — but a
+     * useful signal for rate limiting: somebody transcribing twenty characters
+     * from a printout gets a fat finger wrong, while a script pushing arbitrary
+     * bytes is not transcribing anything. The two deserve different budgets.
+     */
+    public function looksWellFormed(string $code): bool
+    {
+        $length = max(6, (int) Config::get('nova-two-factor.recovery_codes.length', 10));
+
+        return mb_strlen($this->normalize($code)) === $length * 2;
+    }
+
     public function unusedCount(Authenticatable $user): int
     {
         return $this->query($user)->whereNull('used_at')->count();
@@ -139,6 +154,27 @@ class RecoveryCodeManager
         return preg_replace('/[^A-Za-z0-9]/', '', $code) ?? '';
     }
 
+    /**
+     * Unkeyed, unlike the email code's HMAC — and deliberately so.
+     *
+     * Keying the email code matters because six digits is about twenty bits:
+     * an unkeyed digest of a leaked challenges table falls in microseconds, so
+     * the key is what makes the stored value non-invertible at all. A recovery
+     * code is twenty base62 characters — about 119 bits, and 71 at the floor
+     * this package enforces — which no key makes less searchable, because
+     * nobody can search it either way.
+     *
+     * What a key would cost here is the part that decides it. Recovery codes
+     * are long-lived: they sit in a password manager until somebody loses a
+     * phone. Keyed on `APP_KEY`, rotating that key would silently invalidate
+     * every recovery code in the system, and nobody would discover it until the
+     * day the break-glass path was needed. Email codes expire in minutes, so
+     * the same rotation costs one resend.
+     *
+     * The entropy this argument rests on is not left to chance:
+     * `recovery_codes.length` is deploy-time only — no administrator can lower
+     * it from the settings page — and `nova-two-factor:doctor` reports on it.
+     */
     protected function hash(string $normalized): string
     {
         return hash('sha256', $this->normalize($normalized));

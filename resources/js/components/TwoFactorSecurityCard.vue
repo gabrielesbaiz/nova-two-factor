@@ -1,190 +1,239 @@
 <template>
-  <div class="mt-10 sm:mt-0 mb-6" id="two-factor">
-    <div class="md:grid md:grid-cols-3 md:gap-6">
-      <div class="md:col-span-1 px-4 sm:px-0">
-        <Heading :level="3" v-text="__('Two-factor authentication')" />
-        <p class="my-3 text-sm text-gray-600 dark:text-gray-400">
-          {{ __('A second step at sign-in, so a stolen password is not enough on its own.') }}
-        </p>
-      </div>
+  <div id="two-factor" class="mt-10 sm:mt-0 mb-6">
+    <LoadingView :loading="loading">
+      <div class="flex flex-col gap-4">
+        <!-- Nova's own section heading, borrowed rather than invented: `Heading`
+             level 3 is what its pages use above a card, so this sits under the
+             page title at the weight the rest of the panel expects. The badge
+             rides the same line — status is part of the heading, not a note
+             under it. -->
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Heading :level="3" v-text="__('Two-factor authentication')" />
+          <span class="n2f-badge" :class="statusBadgeClass">{{ statusLabel }}</span>
+        </div>
 
-      <Card class="md:col-span-2 p-6">
-        <LoadingView :loading="loading">
-          <!-- Status first, in words as well as colour. -->
-          <div class="flex items-center gap-3 mb-1">
-            <Heading :level="4" class="text-lg font-medium" v-text="statusHeading" />
-            <span class="n2f-badge" :class="statusBadgeClass">{{ statusLabel }}</span>
-          </div>
-
-          <p class="mb-6 text-sm">{{ statusDescription }}</p>
-
-          <!-- Grace-period banner. Turns urgent as the deadline approaches, and
-               the deadline itself is absolute, not a vague "soon". -->
-          <div
-            v-if="graceMessage"
-            class="mb-6 rounded-lg px-4 py-3 text-sm"
-            :class="graceUrgent
+        <!-- Grace-period banner. Turns urgent as the deadline approaches, and
+             the deadline itself is absolute, not a vague "soon". -->
+        <div
+          v-if="graceMessage"
+          class="rounded-lg px-4 py-3 text-sm"
+          :class="
+            graceUrgent
               ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300'
-              : 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'"
-            role="status"
-          >
-            {{ graceMessage }}
-          </div>
+              : 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+          "
+          role="status"
+        >
+          {{ graceMessage }}
+        </div>
 
-          <!-- ── Enrolled methods ─────────────────────────────────────────── -->
-          <div v-if="methods.length" class="divide-y divide-gray-100 dark:divide-gray-800">
-            <TwoFactorMethodRow
-              v-for="method in methods"
-              :key="method.id"
-              :method="method"
-              @rename="startRename"
-              @default="makeDefault"
-              @remove="confirmRemove"
-            />
-          </div>
-
-          <!-- ── Add a method ─────────────────────────────────────────────── -->
-          <div v-if="!enrolling" class="mt-6 flex flex-wrap gap-2">
-            <ConfirmsPassword
-              v-for="driver in available"
-              :key="driver.type"
-              @confirmed="startEnrollment(driver.type)"
-            >
-              <Button variant="outline" :dusk="`add-${driver.type}`">
-                {{ __('Add :method', { method: driver.label.toLowerCase() }) }}
-                <span v-if="driver.phishing_resistant" class="n2f-badge n2f-badge-ok ms-2">
-                  {{ __('Strongest') }}
-                </span>
-              </Button>
-            </ConfirmsPassword>
-          </div>
-
-          <!-- ── TOTP enrollment ─────────────────────────────────────────── -->
-          <div v-if="enrolling === 'totp'" class="mt-6">
-            <div class="flex items-center gap-2 mb-6 text-xs font-bold uppercase tracking-wide">
-              <span :class="step === 1 ? 'text-primary-500' : 'text-gray-400'">{{ __('1 Scan') }}</span>
-              <hr class="flex-1 n2f-divider" />
-              <span :class="step === 2 ? 'text-primary-500' : 'text-gray-400'">{{ __('2 Verify') }}</span>
-            </div>
-
-            <div class="flex flex-col sm:flex-row gap-6">
-              <TwoFactorQrCode
-                :svg="intent.qr_code"
-                :secret="intent.secret"
-                :secret-groups="intent.secret_groups"
-                :otpauth-uri="intent.otpauth_uri"
+        <!-- ── One decision per view: while a ceremony is running, or codes are
+             waiting to be saved, the overview steps out of the way. ───────── -->
+        <template v-if="!enrolling && !freshCodes.length">
+          <!-- ── Enrolled methods, and the ones still on offer ───────────── -->
+          <Card class="px-4 py-1">
+            <div class="divide-y divide-gray-100 dark:divide-gray-800">
+              <TwoFactorMethodRow
+                v-for="method in methods"
+                :key="method.id"
+                :method="method"
+                @rename="rename"
+                @default="makeDefault"
+                @remove="confirmRemove"
               />
 
-              <div class="flex-1">
-                <p class="mb-3 text-sm">{{ __('Then enter the six-digit code your app shows.') }}</p>
+              <!-- A factor you have not set up is still worth naming: the gap is
+                   the point of the list. -->
+              <div
+                v-for="driver in unconfigured"
+                :key="driver.type"
+                class="flex items-center gap-4 py-3"
+              >
+                <span class="n2f-method-icon" aria-hidden="true">
+                  <Icon :name="driver.icon" type="micro" />
+                </span>
 
-                <TwoFactorCodeInput
-                  v-model="code"
-                  :invalid="Boolean(error)"
-                  :readonly="verifying"
-                  @complete="confirmEnrollment"
-                />
-
-                <HelpText v-if="error" class="mt-2 text-red-500" role="alert">{{ error }}</HelpText>
-
-                <!-- Two failures is where clock skew becomes the likely cause,
-                     and repeating "invalid code" a third time does not help. -->
-                <HelpText v-if="failures >= 2" class="mt-2">
-                  {{ __("Codes rotate every 30 seconds. If this keeps failing, check that your phone's clock is set automatically.") }}
-                </HelpText>
-
-                <div class="mt-4 flex gap-2">
-                  <Button :loading="verifying" @click="confirmEnrollment(code)">{{ __('Turn on') }}</Button>
-                  <Button variant="ghost" @click="cancelEnrollment">{{ __('Cancel') }}</Button>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-bold text-gray-400 truncate">{{ driver.label }}</p>
+                  <p class="text-[11.5px] leading-tight text-gray-400">{{ driver.note }}</p>
                 </div>
+
+                <ConfirmsPassword @confirmed="startEnrollment(driver.type)">
+                  <Button variant="outline" size="small" :dusk="`add-${driver.type}`">
+                    {{ __('Add') }}
+                  </Button>
+                </ConfirmsPassword>
               </div>
             </div>
-          </div>
+          </Card>
 
-          <!-- ── Passkey enrollment ──────────────────────────────────────── -->
-          <div v-if="enrolling === 'webauthn'" class="mt-6 text-center">
-            <p class="mb-4 text-sm">
-              {{ waitingForDevice
-                ? __('Waiting for your device…')
-                : __('Your browser will ask for your fingerprint, face, or security key.') }}
-            </p>
-            <Loader v-if="waitingForDevice" class="mx-auto text-primary-500" />
-            <HelpText v-if="error" class="mt-3 text-red-500" role="alert">{{ error }}</HelpText>
-            <Button v-if="!waitingForDevice" class="mt-2" @click="runPasskeyEnrollment">
-              {{ __('Try again') }}
-            </Button>
-            <Button variant="ghost" class="mt-2 ms-2" @click="cancelEnrollment">{{ __('Cancel') }}</Button>
-          </div>
-
-          <!-- ── Email enrollment ────────────────────────────────────────── -->
-          <div v-if="enrolling === 'email'" class="mt-6">
-            <p class="mb-3 text-sm">
-              {{ __('We sent a code to :destination.', { destination: intent.destination_hint }) }}
-            </p>
-            <TwoFactorCodeInput v-model="code" :invalid="Boolean(error)" @complete="confirmEnrollment" />
-            <HelpText v-if="error" class="mt-2 text-red-500" role="alert">{{ error }}</HelpText>
-            <HelpText class="mt-2">
-              {{ __('Email codes are weaker than an authenticator app or a passkey — anyone with your inbox has your second factor.') }}
-            </HelpText>
-            <div class="mt-4 flex gap-2">
-              <Button :loading="verifying" @click="confirmEnrollment(code)">{{ __('Confirm') }}</Button>
-              <Button variant="ghost" @click="cancelEnrollment">{{ __('Cancel') }}</Button>
-            </div>
-          </div>
-
-          <!-- ── Recovery codes ─────────────────────────────────────────── -->
-          <div v-if="freshCodes.length" class="mt-8">
-            <DividerLine class="mb-6" />
-            <Heading :level="4" class="text-base mb-3" v-text="__('Save your recovery codes')" />
-            <TwoFactorRecoveryCodes
-              :codes="freshCodes"
-              :app-name="appName"
-              :account="account"
-              @acknowledged="freshCodes = []"
-            />
-          </div>
-
-          <div v-else-if="methods.length" class="mt-8">
-            <DividerLine class="mb-6" />
-            <div class="flex items-baseline justify-between">
-              <Heading :level="4" class="text-base" v-text="__('Recovery codes')" />
-              <span class="text-xs" :class="recovery.running_low ? 'text-yellow-600' : 'text-gray-400'">
+          <!-- ── Recovery codes are a row of their own, not a footnote ────── -->
+          <Card v-if="methods.length" class="p-4">
+            <div class="flex items-baseline gap-2">
+              <p
+                class="flex-1 text-sm font-bold text-gray-900 dark:text-gray-100"
+                v-text="__('Recovery codes')"
+              />
+              <span
+                class="text-xs"
+                :class="
+                  recovery.running_low ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400'
+                "
+              >
                 {{ __(':remaining of :total remaining', recovery) }}
               </span>
             </div>
 
-            <div class="mt-3 flex gap-1" aria-hidden="true">
+            <div class="n2f-ticks mt-2.5" :data-low="recovery.running_low" aria-hidden="true">
               <span
                 v-for="index in recovery.total"
                 :key="index"
-                class="h-1 flex-1 rounded"
-                :class="index <= recovery.remaining ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'"
+                class="n2f-tick"
+                :data-used="index > recovery.remaining"
               />
             </div>
 
-            <p class="mt-3 text-xs text-gray-400">
-              {{ __('Stored hashed, so they cannot be shown to you again. Using one signs you in; it does not turn off two-factor authentication.') }}
+            <p class="mt-2 text-[11.5px] leading-tight text-gray-400">
+              {{
+                __(
+                  'Use one if you cannot get to your usual method. Each works a single time, and we cannot show them to you again — so keep them somewhere safe.',
+                )
+              }}
             </p>
 
-            <ConfirmsPassword @confirmed="regenerate">
-              <Button variant="outline" state="danger" class="mt-4">{{ __('Generate new codes') }}</Button>
+            <!-- Regeneration is offered where the shortage is visible, rather
+                 than parked permanently next to codes that are fine. -->
+            <ConfirmsPassword v-if="recovery.running_low" @confirmed="regenerate">
+              <Button variant="outline" state="danger" size="small" class="mt-3">
+                {{ __('Generate new codes') }}
+              </Button>
             </ConfirmsPassword>
+          </Card>
+        </template>
+
+        <!-- ── TOTP enrollment ─────────────────────────────────────────── -->
+        <Card v-if="enrolling === 'totp'" class="p-6">
+          <div class="flex items-center gap-2 mb-6 text-xs font-bold uppercase tracking-wide">
+            <span :class="step === 1 ? 'text-primary-500' : 'text-gray-400'">{{
+              __('1 Scan')
+            }}</span>
+            <hr class="flex-1 n2f-divider" />
+            <span :class="step === 2 ? 'text-primary-500' : 'text-gray-400'">{{
+              __('2 Verify')
+            }}</span>
           </div>
-        </LoadingView>
-      </Card>
-    </div>
+
+          <div class="flex flex-col sm:flex-row gap-6">
+            <TwoFactorQrCode
+              :svg="intent.qr_code"
+              :secret="intent.secret"
+              :secret-groups="intent.secret_groups"
+              :uri="intent.uri"
+            />
+
+            <div class="flex-1">
+              <p class="mb-3 text-sm">
+                {{ __('Then enter the six-digit code your app shows.') }}
+              </p>
+
+              <TwoFactorCodeInput
+                v-model="code"
+                :invalid="Boolean(error)"
+                @complete="confirmEnrollment"
+              />
+
+              <HelpText v-if="error" class="mt-2 text-red-500" role="alert">{{ error }}</HelpText>
+
+              <!-- Two failures is where clock skew becomes the likely cause,
+                   and repeating "invalid code" a third time does not help. -->
+              <HelpText v-if="failures >= 2" class="mt-2">
+                {{
+                  __(
+                    "Codes rotate every 30 seconds. If this keeps failing, check that your phone's clock is set automatically.",
+                  )
+                }}
+              </HelpText>
+
+              <div class="mt-4 flex gap-2">
+                <Button :loading="verifying" @click="confirmEnrollment(code)">{{
+                  __('Turn on')
+                }}</Button>
+                <Button variant="ghost" @click="cancelEnrollment">{{ __('Cancel') }}</Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <!-- ── Passkey enrollment ──────────────────────────────────────── -->
+        <Card v-if="enrolling === 'webauthn'" class="p-6 text-center">
+          <p class="mb-4 text-sm">
+            {{
+              waitingForDevice
+                ? __('Waiting for your device…')
+                : __('Your browser will ask for your fingerprint, face, or security key.')
+            }}
+          </p>
+          <Loader v-if="waitingForDevice" class="mx-auto text-primary-500" />
+          <HelpText v-if="error" class="mt-3 text-red-500" role="alert">{{ error }}</HelpText>
+          <Button v-if="!waitingForDevice" class="mt-2" @click="runPasskeyEnrollment">
+            {{ __('Try again') }}
+          </Button>
+          <Button variant="ghost" class="mt-2 ms-2" @click="cancelEnrollment">{{
+            __('Cancel')
+          }}</Button>
+        </Card>
+
+        <!-- ── Email enrollment ────────────────────────────────────────── -->
+        <Card v-if="enrolling === 'email'" class="p-6">
+          <p class="mb-3 text-sm">
+            {{ __('We sent a code to :destination.', { destination: intent.destination_hint }) }}
+          </p>
+          <TwoFactorCodeInput
+            v-model="code"
+            :invalid="Boolean(error)"
+            @complete="confirmEnrollment"
+          />
+          <HelpText v-if="error" class="mt-2 text-red-500" role="alert">{{ error }}</HelpText>
+          <HelpText class="mt-2">
+            {{
+              __(
+                'Email codes are weaker than an authenticator app or a passkey — anyone with your inbox has your second factor.',
+              )
+            }}
+          </HelpText>
+          <div class="mt-4 flex gap-2">
+            <Button :loading="verifying" @click="confirmEnrollment(code)">{{
+              __('Confirm')
+            }}</Button>
+            <Button variant="ghost" @click="cancelEnrollment">{{ __('Cancel') }}</Button>
+          </div>
+        </Card>
+
+        <!-- ── Fresh recovery codes: the only time they can be shown ────── -->
+        <Card v-if="freshCodes.length" class="p-6">
+          <Heading :level="4" class="text-base mb-3" v-text="__('Save your recovery codes')" />
+          <TwoFactorRecoveryCodes
+            :codes="freshCodes"
+            :app-name="appName"
+            :account="account"
+            @acknowledged="freshCodes = []"
+          />
+        </Card>
+      </div>
+    </LoadingView>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { Button } from 'laravel-nova-ui'
+import { Button, Icon } from 'laravel-nova-ui'
 import TwoFactorCodeInput from './TwoFactorCodeInput.vue'
 import TwoFactorMethodRow from './TwoFactorMethodRow.vue'
 import TwoFactorQrCode from './TwoFactorQrCode.vue'
 import TwoFactorRecoveryCodes from './TwoFactorRecoveryCodes.vue'
 import { useTwoFactorApi } from '../composables/useTwoFactorApi'
 import { createCredential, describeError, isSupported } from '../support/webauthn'
+import { __ } from '../support/translate'
 
 defineOptions({ name: 'UserSecurityTwoFactorAuthentication' })
 
@@ -198,7 +247,7 @@ const api = useTwoFactorApi()
 
 const loading = ref(true)
 const methods = ref([])
-const available = ref([])
+const drivers = ref([])
 const recovery = ref({ remaining: 0, total: 8, running_low: false })
 const enforcement = ref({ mode: 'optional', applies: false, grace_ends_at: null })
 
@@ -215,31 +264,39 @@ const step = ref(1)
 const appName = computed(() => Nova.config('appName') ?? 'Nova')
 const account = computed(() => Nova.config('userEmail') ?? '')
 
+/**
+ * The rows under the enrolled ones: factors to set up, plus another passkey.
+ *
+ * A second passkey is a normal thing to own — a laptop and a security key, or a
+ * phone and a backup — so it is offered as its own row rather than hidden
+ * behind a generic "add a method" button that happened to target it.
+ */
+const unconfigured = computed(() =>
+  drivers.value
+    .filter(
+      (driver) =>
+        driver.phishing_resistant || !methods.value.some((method) => method.type === driver.type),
+    )
+    .map((driver) => {
+      const enrolled = methods.value.some((method) => method.type === driver.type)
+
+      return {
+        ...driver,
+        enrolled,
+        label: enrolled ? __('Another passkey') : driver.label,
+        note: enrolled ? __('For a second device, or a backup key.') : __('Not set up'),
+      }
+    }),
+)
+
 const statusLabel = computed(() => {
-  if (!methods.value.length) return enforcement.value.applies ? __('Action required') : __('Not set up')
-  return methods.value.length > 1 ? __('Protected') : __('Protected')
+  if (methods.value.length) return __('Protected')
+  return enforcement.value.applies ? __('Action required') : __('Not set up')
 })
 
-const statusBadgeClass = computed(() =>
-  methods.value.length
-    ? 'n2f-badge-ok'
-    : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
-)
-
-const statusHeading = computed(() =>
-  methods.value.length
-    ? __('You have two-factor authentication on')
-    : __('You have not set up two-factor authentication')
-)
-
-const statusDescription = computed(() => {
-  if (!methods.value.length) {
-    return __('Add a method to protect your account.')
-  }
-
-  return methods.value.length > 1
-    ? __('Two methods are active. A lost phone is an inconvenience rather than a lockout.')
-    : __('One method is active. Add a second so a lost device does not lock you out.')
+const statusBadgeClass = computed(() => {
+  if (methods.value.length) return 'n2f-badge-ok'
+  return enforcement.value.applies ? 'n2f-badge-warn' : 'n2f-badge-neutral'
 })
 
 const graceUrgent = ref(false)
@@ -266,9 +323,7 @@ const graceMessage = computed(() => {
 const refresh = async () => {
   const data = await api.fetchOverview()
   methods.value = data.methods
-  available.value = data.available.filter(
-    driver => !methods.value.some(m => m.type === driver.type && driver.type !== 'webauthn')
-  )
+  drivers.value = data.available
   recovery.value = data.recovery_codes
   enforcement.value = data.enforcement
   loading.value = false
@@ -284,7 +339,7 @@ const resetEnrollment = () => {
   waitingForDevice.value = false
 }
 
-const startEnrollment = async type => {
+const startEnrollment = async (type) => {
   resetEnrollment()
 
   if (type === 'webauthn' && !isSupported()) {
@@ -318,12 +373,12 @@ const runPasskeyEnrollment = async () => {
   }
 }
 
-const confirmEnrollment = async value => {
+const confirmEnrollment = async (value) => {
   if (verifying.value) return
   await finish({ type: enrolling.value, code: value ?? code.value })
 }
 
-const finish = async payload => {
+const finish = async (payload) => {
   verifying.value = true
   error.value = null
 
@@ -341,7 +396,9 @@ const finish = async payload => {
     failures.value += 1
     code.value = ''
     error.value =
-      e.response?.data?.errors?.code?.[0] ?? e.response?.data?.message ?? __('That code is not correct.')
+      e.response?.data?.errors?.code?.[0] ??
+      e.response?.data?.message ??
+      __('That code is not correct.')
   } finally {
     verifying.value = false
   }
@@ -349,19 +406,29 @@ const finish = async payload => {
 
 const cancelEnrollment = () => resetEnrollment()
 
-const startRename = async method => {
-  const name = window.prompt(__('Name this method'), method.name)
-  if (!name) return
+/**
+ * Optimistic, like the default switch: the row shows the new name immediately
+ * and puts the old one back if the write fails. Renaming a key is not a
+ * destructive act, and a round trip before the text changes feels broken.
+ */
+const rename = async (method, name) => {
+  const previous = method.name
 
-  await api.renameMethod(method.id, name)
-  await refresh()
+  methods.value = methods.value.map((m) => (m.id === method.id ? { ...m, name } : m))
+
+  try {
+    await api.renameMethod(method.id, name)
+  } catch {
+    methods.value = methods.value.map((m) => (m.id === method.id ? { ...m, name: previous } : m))
+    Nova.error(__('That could not be saved.'))
+  }
 }
 
 // Optimistic: the radio flips at once and reverts if the write fails. Nothing
 // destructive is ever optimistic.
-const makeDefault = async method => {
-  const previous = methods.value.map(m => ({ ...m }))
-  methods.value = methods.value.map(m => ({ ...m, is_default: m.id === method.id }))
+const makeDefault = async (method) => {
+  const previous = methods.value.map((m) => ({ ...m }))
+  methods.value = methods.value.map((m) => ({ ...m, is_default: m.id === method.id }))
 
   try {
     await api.setDefaultMethod(method.id)
@@ -371,27 +438,24 @@ const makeDefault = async method => {
   }
 }
 
-const confirmRemove = method => {
+// The confirmation lives on the row now — it can name the method and say what
+// is left, where a browser dialog names nothing.
+const confirmRemove = (method) => {
   Nova.$emit('nova-two-factor:confirm-remove', method)
-
-  if (!window.confirm(__('Remove :name? You will have :count methods left.', {
-    name: method.name,
-    count: methods.value.length - 1,
-  }))) {
-    return
-  }
 
   remove(method)
 }
 
-const remove = async method => {
+const remove = async (method) => {
   try {
     await api.removeMethod(method.id)
     await refresh()
     Nova.success(__('Method removed.'))
   } catch (e) {
     Nova.error(
-      e.response?.data?.errors?.method?.[0] ?? e.response?.data?.message ?? __('That could not be removed.')
+      e.response?.data?.errors?.method?.[0] ??
+        e.response?.data?.message ??
+        __('That could not be removed.'),
     )
   }
 }

@@ -120,7 +120,7 @@ class UpgradeCommand extends Command
             'authenticatable_type' => $userType,
             'authenticatable_id' => $row->user_id,
             'type' => MethodType::Totp,
-            'name' => 'Authenticator app',
+            'name' => MethodType::Totp->label(),
             'secret' => $secret,
             'is_default' => true,
             'confirmed_at' => (bool) ($row->confirmed ?? false) ? ($row->updated_at ?? now()) : null,
