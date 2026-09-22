@@ -34,7 +34,6 @@ code{font-family:"JetBrains Mono",monospace;font-size:.85em;background:var(--acw
  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
 .navin{max-width:1460px;margin:0 auto;padding:0 24px;height:100%;display:flex;align-items:center;gap:14px}
 .lg{display:flex;align-items:center;gap:10px;color:var(--ink);font-family:Unbounded,sans-serif;font-weight:600;font-size:14.5px;letter-spacing:-.02em;white-space:nowrap}
-.lg img{width:25px;height:25px;border-radius:7px}
 .lg .v{font-family:"JetBrains Mono",monospace;font-size:10.5px;font-weight:400;color:var(--ac);background:var(--acw);padding:2px 7px;border-radius:100px}
 .navsp{flex:1}
 .navlinks{display:flex;gap:2px}
