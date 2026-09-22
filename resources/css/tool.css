@@ -1852,3 +1852,16 @@
 .dark .n2f-filter-chip {
   color: rgba(var(--colors-primary-400), 1);
 }
+
+/* Nova's user security page caps its container at max-w-7xl and centres it,
+   which leaves a wide screen mostly empty either side of a card that is a list
+   of rows with controls on the right. The cap lives on Nova's own page div, so
+   it can only be reached from the outside: `:has()` widens exactly the
+   container holding our card and nothing else that shares the class.
+
+   Deliberately not configurable. An application that wants Nova's original
+   width overrides one declaration in its own stylesheet, which is a smaller
+   thing to carry than a setting nobody would ever change twice. */
+.max-w-7xl:has(> div > #two-factor) {
+  max-width: none;
+}

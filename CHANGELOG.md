@@ -2,6 +2,19 @@
 
 All notable changes to `nova-two-factor` are documented here.
 
+## 2.1.1 — 2026-09-22
+
+### Fixed
+
+- The user security page now uses the full width of Nova's content area. Nova
+  caps that page at `max-w-7xl` and centres it, which left a wide screen mostly
+  empty either side of a card that is a list of rows with controls on the right.
+  The cap sits on Nova's own page container, so the fix reaches it from the
+  outside with `:has()`, scoped to the container holding this package's card.
+
+  Deliberately not configurable: an application that prefers Nova's original
+  width overrides one declaration in its own stylesheet.
+
 ## 2.1.0 — 2026-09-21
 
 ### Added

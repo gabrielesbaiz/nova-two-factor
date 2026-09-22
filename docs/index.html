@@ -25,7 +25,7 @@
 <div class="veil" aria-hidden="true"></div>
 
 <div class="nav"><div class="navin">
-  <a class="lg" href="#/home">Nova Two-Factor <span class="v">2.1.0</span></a>
+  <a class="lg" href="#/home">Nova Two-Factor <span class="v">2.1.1</span></a>
   <button id="burger" type="button">Menu</button>
   <div class="navsp"></div>
   <div class="navlinks">
@@ -52,7 +52,7 @@
   <div class="w">
     <div class="hero">
       <div>
-        <span class="tagpill"><i></i>v2.1.0 · Laravel 11–13 · Nova 5 · MIT</span>
+        <span class="tagpill"><i></i>v2.1.1 · Laravel 11–13 · Nova 5 · MIT</span>
         <h1>
           <span class="line"><span>One password</span></span>
           <span class="line"><span>is one</span></span>
@@ -468,7 +468,7 @@ NOVA_TWO_FACTOR_LIMIT_WEBAUTHN=30</pre>
       <div class="cal w"><span class="i">!</span><p><code>NOVA_TWO_FACTOR_ENABLED=false</code> is legitimate — a multi-domain install turns the package off per domain — so <code>doctor</code> reports it as valid and no test fails. An application with it set is indistinguishable from one without the package. To unblock local work, pause from the Settings page instead.</p></div>
 
       <h2 id="builder">Configuration builder</h2>
-      <p>Every option above that has an environment variable — all 44 of them — is here. The <code>.env</code> is generated live and contains <b>only the values that differ from the defaults</b>, because everything else is already what the package ships.</p>
+      <p>Every setting above that has an environment variable — all 44 of them — is here. The <code>.env</code> is generated live and contains <b>only the values that differ from the defaults</b>, because everything else is already what the package ships.</p>
 
       <div class="builder" id="cfgbuilder"></div>
     </section>
@@ -914,6 +914,14 @@ php artisan vendor:publish --tag=nova-assets --force</pre>
     <section class="page hidden" data-page="changelog">
       <h2 id="releases">Releases</h2>
       <div class="tl">
+        <div class="rel">
+          <h3>2.1.1</h3>
+          <div class="when">22 September 2026</div>
+          <div class="grp"><h4>Fixed</h4><ul>
+            <li>The user security page now uses the full width of Nova's content area. Nova caps that page at <code>max-w-7xl</code> and centres it, which left a wide screen mostly empty either side of a card that is a list of rows with controls on the right.</li>
+            <li>Deliberately not configurable — an application that prefers Nova's original width overrides one declaration in its own stylesheet.</li>
+          </ul></div>
+        </div>
         <div class="rel">
           <h3>2.1.0</h3>
           <div class="when">21 September 2026</div>

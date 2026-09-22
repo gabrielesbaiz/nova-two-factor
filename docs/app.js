@@ -226,7 +226,7 @@ addEventListener('scroll', () => {
       if (ok && mode === 'lock') ok = lock;
       o.classList.toggle('hide', !ok); if (ok) n++;
     });
-    count.textContent = `${n} of ${opts.length} options`;
+    count.textContent = `${n} of ${opts.length} entries`;
     nores.classList.toggle('hidden', n > 0);
     // hide a group heading whose options have all filtered out
     $$('.page[data-page="configuration"] .optlist').forEach(l => {
@@ -342,7 +342,7 @@ addEventListener('scroll', () => {
 
   root.innerHTML = `
     <div class="bhead">
-      <span class="bpill">44 options · 7 groups</span>
+      <span class="bpill">44 settings · 7 groups</span>
       <span class="bhint">Only what you change is written out</span>
     </div>
     <div class="bwrap">
