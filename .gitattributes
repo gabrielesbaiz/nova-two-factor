@@ -25,3 +25,6 @@
 /tests                  export-ignore
 /vite.config.js         export-ignore
 /workbench              export-ignore
+
+# The documentation site is for GitHub Pages, not for the Composer dist.
+/docs export-ignore

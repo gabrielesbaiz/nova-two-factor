@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Nova Two-Factor</title>
+<meta name="description" content="Passkeys, authenticator apps, email codes and recovery codes for Laravel Nova — with enforcement policy, step-up re-authentication, trusted devices, an audit trail and three administration pages.">
+<link rel="canonical" href="https://gabrielesbaiz.github.io/nova-two-factor/">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#128272;</text></svg>">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Nova Two-Factor">
+<meta property="og:description" content="A second factor Laravel Nova does not ship: passkeys, authenticator apps, email codes and recovery codes, with enforcement and admin oversight.">
+<meta property="og:url" content="https://gabrielesbaiz.github.io/nova-two-factor/">
+<meta property="og:image" content="https://gabrielesbaiz.github.io/nova-two-factor/shots/admin-overview-dark.png">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="app.css">
+
+<div id="prog"></div>
+<canvas id="field" aria-hidden="true"></canvas>
+<div class="veil" aria-hidden="true"></div>
+
+<div class="nav"><div class="navin">
+  <a class="lg" href="#/home"><img src="nova-two-factor-logo.png" alt="">Nova Two-Factor <span class="v">2.1.0</span></a>
+  <button id="burger" type="button">Menu</button>
+  <div class="navsp"></div>
+  <div class="navlinks">
+    <a href="#/docs" data-nav="docs">Guide</a>
+    <a href="#/configuration" data-nav="configuration">Configuration</a>
+    <a href="#/screens" data-nav="screens">Screens</a>
+    <a href="#/upgrade" data-nav="upgrade">Upgrade</a>
+    <a href="#/changelog" data-nav="changelog">Changelog</a>
+    <a href="https://github.com/sponsors/gabrielesbaiz" class="spnav">♥ Sponsor</a>
+  </div>
+  <button class="kbtn" id="kbtn" type="button">⌕ <span>Search</span> <kbd>⌘K</kbd></button>
+  <button id="tt" type="button">Dark</button>
+</div></div>
+
+<div class="pal hidden" id="pal">
+  <div class="palbox">
+    <input id="palq" type="search" placeholder="Search the documentation…" aria-label="Search">
+    <div class="palres" id="palres"></div>
+  </div>
+</div>
+
+<!-- ======================= HOME ======================= -->
+<div id="home">
+  <div class="w">
+    <div class="hero">
+      <div>
+        <span class="tagpill"><i></i>v2.1.0 · Laravel 11–13 · Nova 5 · MIT</span>
+        <h1>
+          <span class="line"><span>One password</span></span>
+          <span class="line"><span>is one</span></span>
+          <span class="line"><span class="g">mistake away.</span></span>
+        </h1>
+        <p class="dek">Passkeys, authenticator apps, email codes and recovery codes for Laravel Nova — with enforcement policy, step-up re-authentication, trusted devices, an audit trail and three administration pages.</p>
+        <div class="cta">
+          <a class="btn p" href="#/docs">Get started →</a>
+          <a class="btn s" href="#/installation">Installation</a>
+        </div>
+        <p class="cmdline">$ <b>composer require gabrielesbaiz/nova-two-factor</b></p>
+      </div>
+      <div class="demo" id="demo">
+        <div class="dh"><h3>Verify your identity</h3><span class="t" id="clock">00:30</span></div>
+        <p class="dsub">Type six digits — or let it demo itself.</p>
+        <div class="cells" id="cells"><div class="c cur"></div><div class="c"></div><div class="c"></div><div class="c"></div><div class="c"></div><div class="c"></div></div>
+        <div class="dfoot"><span class="hint">Code from your authenticator app</span><span class="stat" id="stat">awaiting input</span></div>
+        <input class="typed" id="typed" inputmode="numeric" maxlength="6" aria-label="Demo verification code">
+      </div>
+    </div>
+  </div>
+
+  <div class="statband"><div class="w">
+    <div class="nums">
+      <div class="num"><div class="v" data-to="4">0</div><div class="l">Factor types</div></div>
+      <div class="num"><div class="v" data-to="3">0</div><div class="l">Admin pages</div></div>
+      <div class="num"><div class="v" data-to="338">0</div><div class="l">Tests passing</div></div>
+      <div class="num"><div class="v" data-to="0">0</div><div class="l">Remote calls</div></div>
+    </div>
+  </div></div>
+
+  <div class="strip"><div class="mq" id="mq"></div></div>
+
+  <div class="hsec"><div class="w">
+    <p class="eye rv">Factors</p>
+    <h2 class="rv">Four kinds.<br>Several per user.</h2>
+    <p class="lede rv">Losing a phone should not mean losing the account. The challenge offers whatever the user actually holds.</p>
+    <div class="four">
+      <div class="fc rv"><span class="k">Phishing-resistant</span><h3>Passkeys</h3><p>WebAuthn credentials stored <code>encrypted:json</code>, looked up by SHA-256 of the credential ID.</p></div>
+      <div class="fc rv"><span class="k">Offline</span><h3>Authenticator apps</h3><p>160-bit TOTP secrets under an <code>encrypted</code> cast. QR codes generated locally.</p></div>
+      <div class="fc rv"><span class="k">No setup</span><h3>Email codes</h3><p>HMAC-SHA256 keyed on <code>APP_KEY</code>, single-use, short TTL.</p></div>
+      <div class="fc rv"><span class="k">Last resort</span><h3>Recovery codes</h3><p>SHA-256 individually, unique index, single-use. Shown once.</p></div>
+    </div>
+    <a class="seclink" href="#/methods">Read about the factors <span class="ar">→</span></a>
+  </div></div>
+
+  <div class="hsec alt"><div class="w">
+    <p class="eye rv">Screens</p>
+    <h2 class="rv">Every screen ships<br>in both themes.</h2>
+    <p class="lede rv">Challenge, enrollment and step-up render outside Nova's shell as server-rendered Blade — a tool-registered Inertia page never resolves on the cold load a challenge always is. Hit the theme switch; these follow it.</p>
+    <div class="shots">
+      <figure class="rv"><div class="fr tilt"><img class="s-light" src="shots/challenge-methods-light.png" alt="Challenge" loading="lazy"><img class="s-dark" src="shots/challenge-methods-dark.png" alt="Challenge" loading="lazy"></div><figcaption><b>Challenge</b>Whatever the user holds, with trade-offs shown.</figcaption></figure>
+      <figure class="rv"><div class="fr tilt"><img class="s-light" src="shots/security-card-light.png" alt="Security card" loading="lazy"><img class="s-dark" src="shots/security-card-dark.png" alt="Security card" loading="lazy"></div><figcaption><b>Security card</b>Where a user manages their own factors.</figcaption></figure>
+      <figure class="rv"><div class="fr tilt"><img class="s-light" src="shots/admin-overview-light.png" alt="Overview" loading="lazy"><img class="s-dark" src="shots/admin-overview-dark.png" alt="Overview" loading="lazy"></div><figcaption><b>Compliance overview</b>Figures follow the enforcement mode.</figcaption></figure>
+      <figure class="rv"><div class="fr tilt"><img class="s-light" src="shots/step-up-light.png" alt="Step-up" loading="lazy"><img class="s-dark" src="shots/step-up-dark.png" alt="Step-up" loading="lazy"></div><figcaption><b>Step-up</b>A scoped, signed grant before a dangerous action.</figcaption></figure>
+      <figure class="rv"><div class="fr tilt"><img class="s-light" src="shots/totp-enrollment-light.png" alt="Authenticator enrollment" loading="lazy"><img class="s-dark" src="shots/totp-enrollment-dark.png" alt="Authenticator enrollment" loading="lazy"></div><figcaption><b>Enrollment</b>QR generated locally — the secret never leaves your server.</figcaption></figure>
+      <figure class="rv"><div class="fr tilt"><img class="s-light" src="shots/admin-settings-light.png" alt="Settings" loading="lazy"><img class="s-dark" src="shots/admin-settings-dark.png" alt="Settings" loading="lazy"></div><figcaption><b>Settings</b>Policy without a deploy, password-confirmed and audited.</figcaption></figure>
+    </div>
+    <a class="seclink" href="#/screens">See all 14 screens <span class="ar">→</span></a>
+  </div></div>
+
+  <div class="hsec"><div class="w">
+    <p class="eye rv">Enforcement</p>
+    <h2 class="rv">Optional. Encouraged.<br>Required.</h2>
+    <p class="lede rv">One call sets the policy. Under <code>required</code>, grace runs per account or against one shared deadline for everybody.</p>
+    <div class="tw rv"><table>
+      <thead><tr><th>Mode</th><th>Behaviour</th><th>Blocks?</th></tr></thead>
+      <tbody>
+        <tr><td><code>optional</code></td><td>Nothing required, nothing shown.</td><td><span class="bdg g">no</span></td></tr>
+        <tr><td><code>encouraged</code></td><td>A dismissible prompt. Never blocks a request.</td><td><span class="bdg">never</span></td></tr>
+        <tr><td><code>required</code></td><td>Nova is unreachable until enrolled, once grace expires.</td><td><span class="bdg b">yes</span></td></tr>
+      </tbody>
+    </table></div>
+<pre class="rv"><span class="c">// Grace runs per account, or against one shared deadline.</span>
+NovaTwoFactor::make()-&gt;<span class="k">enforce</span>(<span class="s">'required'</span>, graceDays: 14);
+
+<span class="c">// Or restrict it to the people who need it.</span>
+NovaTwoFactor::make()-&gt;<span class="k">requireFor</span>(fn ($user) =&gt; $user-&gt;hasRole(<span class="s">'admin'</span>));</pre>
+    <a class="seclink" href="#/enforcement">Try the policy simulator <span class="ar">→</span></a>
+  </div></div>
+
+  <div class="hsec alt"><div class="w">
+    <p class="eye rv">Administration</p>
+    <h2 class="rv">Three pages, closed<br>until you open them.</h2>
+    <p class="lede rv"><code>nova.admin_gate</code> points at an ability no fresh application defines, and an undefined ability is denied. Until you say who may look, nobody can — and the menu entry does not render.</p>
+    <div class="pages3">
+      <div class="p3 rv"><span class="u">/dashboards/two-factor-compliance</span><h3>Overview</h3><p>Are we covered, and who do I chase? Figures follow the enforcement mode, and the tiles filter the queue.</p></div>
+      <div class="p3 rv"><span class="u">/dashboards/two-factor-settings</span><h3>Settings</h3><p>Policy without a deploy. Password-confirmed, audited, with a pause that expires by itself.</p></div>
+      <div class="p3 rv"><span class="u">/resources/two-factor-audits</span><h3>Activity</h3><p>What happened, and who did it? Read-only. Secrets are never recorded.</p></div>
+    </div>
+    <a class="seclink" href="#/administration">How oversight works <span class="ar">→</span></a>
+  </div></div>
+
+  <div class="hsec"><div class="w">
+    <p class="eye rv">Security</p>
+    <h2 class="rv">What is stored,<br>and how.</h2>
+    <p class="lede rv">Routes that issue or destroy a factor require a <b>verified session</b> — a cleared challenge, not merely a confirmed password. The attacker this defends against already has the password.</p>
+    <div class="tw rv"><table>
+      <thead><tr><th>Control</th><th>Implementation</th></tr></thead>
+      <tbody>
+        <tr><td>TOTP secrets</td><td><code>encrypted</code> cast, 160-bit, never in a URL or log</td></tr>
+        <tr><td>Recovery codes</td><td>SHA-256, individually, unique index, single-use</td></tr>
+        <tr><td>Email codes</td><td>HMAC-SHA256 keyed on <code>APP_KEY</code>, single-use, short TTL</td></tr>
+        <tr><td>Passkey credentials</td><td><code>encrypted:json</code>; lookup by SHA-256 of the credential ID</td></tr>
+        <tr><td>Trusted devices</td><td>64-character token, only its hash stored</td></tr>
+        <tr><td>Step-up grants</td><td>HMAC over session, user, scope and expiry</td></tr>
+        <tr><td>QR codes</td><td>Generated locally. There is no remote code path.</td></tr>
+      </tbody>
+    </table></div>
+    <a class="seclink" href="#/security">Read the security model <span class="ar">→</span></a>
+  </div></div>
+
+  <div class="hsec alt"><div class="w">
+    <p class="eye rv">Installation</p>
+    <h2 class="rv">Four steps, then<br>check your work.</h2>
+    <div class="steps">
+      <div class="s rv"><div><h3>Install and publish</h3><p>Pre-authentication screens render outside Nova's shell, so their assets must reach your <code>public</code> directory.</p></div></div>
+      <div class="s rv"><div><h3>Add the trait</h3><p><code>HasTwoFactorAuthentication</code> on every authenticatable model that may hold a factor.</p></div></div>
+      <div class="s rv"><div><h3>Register the tool</h3><p><code>NovaTwoFactor::make()</code> in <code>NovaServiceProvider::tools()</code>.</p></div></div>
+      <div class="s rv"><div><h3>Run the doctor</h3><p>It checks what fails silently — unregistered middleware, stale assets, a relying party from the wrong domain.</p></div></div>
+    </div>
+<pre class="rv">composer require gabrielesbaiz/nova-two-factor
+php artisan vendor:publish --tag=nova-two-factor-assets
+php artisan nova-two-factor:doctor</pre>
+    <a class="seclink" href="#/installation">Full installation guide <span class="ar">→</span></a>
+  </div></div>
+
+  <div class="sponsor"><div class="w">
+    <div class="sphead">
+      <div class="rv">
+        <p class="eye">Support this package</p>
+        <h2>Free forever.<br>Not free to <span class="heart">maintain</span>.</h2>
+        <p>Two-factor authentication is the kind of thing nobody notices until the day it saves an account. That day never shows up in a budget — so the packages that guard it tend to be written on goodwill and maintained on whatever is left over.</p>
+        <p>Sponsorship is what keeps this one current with the frameworks it sits on, and keeps the test suite proving that every fix still holds. It stays MIT either way.</p>
+      </div>
+      <div class="spcard rv">
+        <div class="amt">$5</div>
+        <div class="per">per month · cancel anytime</div>
+        <a class="btn p" href="https://github.com/sponsors/gabrielesbaiz">♥ Become a sponsor</a>
+        <p class="note">Company tiers get your logo in the README and on this page.</p>
+      </div>
+    </div>
+
+    <div class="tiers">
+      <div class="tier rv"><span class="free">Free</span><div class="ic">⭐</div><h3>Star the repo</h3><p>Thirty seconds, and it is the first signal other developers look at when deciding whether to trust a package.</p></div>
+      <div class="tier rv"><span class="free">Free</span><div class="ic">🐛</div><h3>Open a good issue</h3><p>A clear reproduction is worth more than you think. Half the fixes in 2.0 started as someone else's bug report.</p></div>
+      <div class="tier rv"><div class="ic">❤️</div><h3>Sponsor from $5</h3><p>Goes towards the maintenance nobody sees: framework upgrades, security review, and keeping the test matrix green.</p></div>
+      <div class="tier rv"><div class="ic">🏢</div><h3>Company tier</h3><p>Your logo here and in the README. If this package guards your admin panel, it is cheaper than the incident it prevents.</p></div>
+    </div>
+
+    <div class="spwhy rv"><span class="i">♥</span><p><b>Why ask at all?</b> This package is MIT and always will be. Nothing is paywalled, nothing phones home, and no feature is held back for sponsors. Sponsorship buys maintenance time, not features — and if you cannot sponsor, the star and the bug report genuinely help.</p></div>
+  </div></div>
+</div>
+
+
+<!-- ======================= DOCS SHELL ======================= -->
+<div class="shell hidden" id="shell">
+  <aside class="side" id="side"></aside>
+  <main class="doc" id="view">
+
+    <!-- INTRODUCTION -->
+    <section class="page hidden" data-page="docs">
+      <h2 id="what">What this is</h2>
+      <p>Nova Two-Factor adds a complete second-factor implementation to Laravel Nova: authenticator applications, passkeys, email codes and recovery codes, backed by an enforcement policy, step-up re-authentication for dangerous actions, trusted devices, an audit trail, and three administration pages.</p>
+      <h2 id="need">Do you need it?</h2>
+      <p>Nova already ships two-factor authentication of its own, through Laravel Fortify. If authenticator applications and recovery codes for users who opt in are all you need, you should use it:</p>
+<pre>use Laravel\Fortify\Features;
+
+Nova::fortify()-&gt;features([
+    Features::<span class="k">twoFactorAuthentication</span>(['confirm' =&gt; true, 'confirmPassword' =&gt; true]),
+]);</pre>
+      <p>This package exists for what that cannot do.</p>
+      <div class="tw"><table>
+        <thead><tr><th>Capability</th><th>Nova + Fortify</th><th>This package</th></tr></thead>
+        <tbody>
+          <tr><td>Authenticator apps (TOTP)</td><td><span class="bdg g">yes</span></td><td><span class="bdg g">yes</span></td></tr>
+          <tr><td>Recovery codes</td><td><span class="bdg g">yes</span></td><td><span class="bdg g">yes</span></td></tr>
+          <tr><td>Passkeys / WebAuthn</td><td><span class="bdg">—</span></td><td><span class="bdg g">yes</span></td></tr>
+          <tr><td>Email one-time codes</td><td><span class="bdg">—</span></td><td><span class="bdg g">yes</span></td></tr>
+          <tr><td>More than one method per user</td><td><span class="bdg">—</span></td><td><span class="bdg g">yes</span></td></tr>
+          <tr><td>Mandatory enrollment, with grace</td><td><span class="bdg">—</span></td><td><span class="bdg g">yes</span></td></tr>
+          <tr><td>Per-role targeting</td><td><span class="bdg">—</span></td><td><span class="bdg g">yes</span></td></tr>
+          <tr><td>Step-up re-auth</td><td><span class="bdg">—</span></td><td><span class="bdg g">yes</span></td></tr>
+          <tr><td>Trusted devices</td><td><span class="bdg">—</span></td><td><span class="bdg g">yes</span></td></tr>
+          <tr><td>Audit trail</td><td><span class="bdg">—</span></td><td><span class="bdg g">yes</span></td></tr>
+          <tr><td>Admin oversight and compliance</td><td><span class="bdg">—</span></td><td><span class="bdg g">yes</span></td></tr>
+          <tr><td>TOTP replay protection</td><td><span class="bdg w">partial</span></td><td><span class="bdg g">yes</span></td></tr>
+          <tr><td>Recovery codes hashed individually</td><td><span class="bdg">—</span></td><td><span class="bdg g">yes</span></td></tr>
+        </tbody>
+      </table></div>
+      <h2 id="reqs">Requirements</h2>
+      <ul>
+        <li>PHP 8.2+ <span class="bdg">8.3+ for Laravel 13</span></li>
+        <li>Laravel 11, 12 or 13</li>
+        <li>Nova 5.7+ <span class="bdg">5.11+ for Laravel 13</span></li>
+        <li><code>https</code> in production — passkeys require a secure context; <code>localhost</code> is exempt</li>
+      </ul>
+    </section>
+
+    <!-- INSTALLATION -->
+    <section class="page hidden" data-page="installation">
+      <h2 id="install">Install the package</h2>
+      <p>Install it, publish its migrations and configuration, and publish the assets used by the screens that render outside Nova.</p>
+<pre>composer require gabrielesbaiz/nova-two-factor
+
+php artisan vendor:publish --tag=nova-two-factor-migrations
+php artisan migrate
+php artisan vendor:publish --tag=nova-two-factor-config
+php artisan vendor:publish --tag=nova-two-factor-assets</pre>
+      <div class="cal n"><span class="i">i</span><p>The challenge, enrollment and step-up screens render outside Nova's shell, so their bundle has to live under <code>public/</code>. Re-publish with <code>--force</code> after every upgrade, or the pre-authentication screens run stale JavaScript against a new backend.</p></div>
+
+      <h2 id="trait">Add the trait</h2>
+      <p>On each authenticatable model that may hold a second factor.</p>
+<pre>use Gabrielesbaiz\NovaTwoFactor\Concerns\HasTwoFactorAuthentication;
+
+class User extends Authenticatable
+{
+    use HasTwoFactorAuthentication;
+}</pre>
+
+      <h2 id="register">Register the tool</h2>
+      <p>In your <code>NovaServiceProvider</code>.</p>
+<pre>use Gabrielesbaiz\NovaTwoFactor\NovaTwoFactor;
+
+public function tools(): array
+{
+    return [
+        NovaTwoFactor::<span class="k">make</span>(),
+    ];
+}</pre>
+
+      <h2 id="fortify">Keep the Fortify features enabled</h2>
+      <p>Ensure Fortify's <code>updatePasswords</code> and <code>twoFactorAuthentication</code> features remain enabled. This package renders its own card on Nova's user security page, and Nova only registers that page when at least one security feature is active. <code>updatePasswords</code> registers <code>nova.password.confirm</code>, which guards every destructive route in this package.</p>
+<pre>use Laravel\Fortify\Features;
+
+Nova::fortify()-&gt;features([
+    Features::<span class="k">updatePasswords</span>(),
+    Features::<span class="k">twoFactorAuthentication</span>(['confirm' =&gt; false, 'confirmPassword' =&gt; false]),
+]);</pre>
+      <p>Set <code>confirm</code> and <code>confirmPassword</code> to <code>false</code>. Enrollment confirmation is handled by this package rather than by Fortify's own endpoint.</p>
+      <div class="cal d"><span class="i">!</span><p><b>This is a requirement, not a recommendation.</b> With every Fortify security feature disabled, <code>/user-security</code> does not exist: it returns 404 or 403, and the enrollment screen's links dead-end there.</p></div>
+
+      <h2 id="supersede">Superseding Fortify's challenge</h2>
+      <p>With the feature enabled, Fortify's <code>RedirectIfTwoFactorAuthenticatable</code> would divert any user holding a <code>users.two_factor_secret</code> to Fortify's own challenge. This package supersedes that action, so the challenge stays here — where the method choice, trusted devices and the audit trail live. Credential validation is untouched.</p>
+      <p>You may turn this off if you would rather Fortify owned the Nova login challenge.</p>
+<pre><span class="cmt">// config/nova-two-factor.php</span>
+'fortify' =&gt; [
+    'supersede_challenge' =&gt; true,
+],</pre>
+      <div class="cal w"><span class="i">!</span><p>With <code>supersede_challenge</code> off and a <code>two_factor_secret</code> on the row, users reach Fortify's challenge and never see this package's methods — a login that works and logs nothing. <code>doctor</code> checks for it explicitly.</p></div>
+
+      <h2 id="middleware">Middleware</h2>
+      <p>Middleware is registered for you, on both <code>nova.middleware</code> and <code>nova.api_middleware</code>. There is nothing to add by hand — and if a custom middleware stack has displaced it, <code>doctor</code> says so.</p>
+
+      <h2 id="doctor">Confirm the installation</h2>
+<pre>php artisan nova-two-factor:doctor</pre>
+      <div class="cal n"><span class="i">i</span><p>Run <code>doctor</code> in your deploy pipeline. It exits non-zero on a misconfiguration, and it checks the things that otherwise fail silently: unregistered middleware, stale published assets, a relying party derived from the wrong domain, and exempt patterns that reach the Nova API.</p></div>
+      <div class="cal g"><span class="i">✓</span><p>Report every line that is not <code>PASS</code>. A green doctor is the difference between a package that is installed and one that is actually protecting something.</p></div>
+
+      <h2 id="ai">Installing with an AI assistant?</h2>
+      <p>Point it at <a href="https://github.com/gabrielesbaiz/nova-two-factor/blob/main/AGENTS.md">AGENTS.md</a>, which carries the keys, the pages, and the constraints that keep an agent from “fixing” a failing test by switching the protection off.</p>
+      <div class="cal w"><span class="i">!</span><p>The failure mode that matters here is not a broken build — it is a working build with the protection quietly turned off, which nothing in CI will catch and nobody notices until it is needed.</p></div>
+    </section>
+
+    <!-- CONFIGURATION -->
+    <section class="page hidden" data-page="configuration">
+      <h2 id="overview">Overview</h2>
+      <p>Publish the configuration file, then drive it from <code>.env</code>. Nothing here requires editing the published file, and an application that never publishes it still gets every default.</p>
+<pre>php artisan vendor:publish --tag=nova-two-factor-config</pre>
+      <p>The options that typically differ between environments read from your <code>.env</code> first, so <code>vendor:publish --force</code> can pick up new keys without flattening how a given environment is tuned.</p>
+<pre>NOVA_TWO_FACTOR_ENABLED=true
+NOVA_TWO_FACTOR_MODE=required            # optional | encouraged | required
+NOVA_TWO_FACTOR_GRACE_DAYS=7
+NOVA_TWO_FACTOR_REMIND_DAYS=7
+NOVA_TWO_FACTOR_ENFORCED_FROM=2026-10-01
+NOVA_TWO_FACTOR_GATE=                    # who is targeted
+NOVA_TWO_FACTOR_ADMIN_GATE=              # who may administer
+
+NOVA_TWO_FACTOR_TOTP_ENABLED=true
+NOVA_TWO_FACTOR_WEBAUTHN_ENABLED=true
+NOVA_TWO_FACTOR_EMAIL_ENABLED=true
+
+# Must match the host users browse, or be a registrable parent of it.
+NOVA_TWO_FACTOR_WEBAUTHN_RP_ID=admin.example.com
+NOVA_TWO_FACTOR_WEBAUTHN_RP_NAME="Example Admin"
+NOVA_TWO_FACTOR_WEBAUTHN_ORIGINS=https://admin.example.com
+
+NOVA_TWO_FACTOR_EMAIL_TTL=300
+NOVA_TWO_FACTOR_EMAIL_RESEND_AFTER=60
+
+NOVA_TWO_FACTOR_STEP_UP_TTL=300
+NOVA_TWO_FACTOR_PASSWORD_CONFIRMATION_TTL=900
+NOVA_TWO_FACTOR_TRUSTED_DEVICES=true
+NOVA_TWO_FACTOR_TRUSTED_DEVICE_DAYS=30
+NOVA_TWO_FACTOR_SHOW_TRADEOFFS=true
+
+NOVA_TWO_FACTOR_SETTINGS=false           # policy editable from the panel
+NOVA_TWO_FACTOR_LOCKOUT_ALERT=0          # 0 disables the burst alert
+
+NOVA_TWO_FACTOR_LIMIT_CHALLENGE=5
+NOVA_TWO_FACTOR_LIMIT_STEP_UP=5
+NOVA_TWO_FACTOR_LIMIT_RECOVERY=10
+NOVA_TWO_FACTOR_LIMIT_ENROLL=10
+NOVA_TWO_FACTOR_LIMIT_OTP_SEND=3
+NOVA_TWO_FACTOR_LIMIT_WEBAUTHN=30</pre>
+      <div class="cal n"><span class="i">i</span><p>Options marked <span class="lock">env only</span> cannot be edited from the Settings page. They are read once at boot, so a value written to the settings table would be ignored — and the panel does not offer them.</p></div>
+      <div class="gfilter">
+        <input id="cfgq" type="search" placeholder="Search options — try “grace”, “webauthn”, “ttl”…" aria-label="Search configuration" style="flex:1;min-width:210px;font:inherit;font-size:14px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:11px;padding:11px 14px">
+        <button class="chip on" data-f="all" type="button">All</button>
+        <button class="chip" data-f="env" type="button">Env-driven</button>
+        <button class="chip" data-f="lock" type="button">Env only</button>
+        <span class="pct" id="cfgcount" style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--mute)"></span>
+      </div>
+
+      <h2 id="factors">Factors</h2>
+      <p>Each method can be turned off independently. Disabling every method is refused at runtime — an enforcement policy with nothing to enrol would lock everyone out.</p>
+      <div class="optlist">
+        <div class="opt"><div class="ohead"><span class="okey">methods.totp.enabled</span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_TOTP_ENABLED</span><p class="odesc">Offer authenticator applications.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.totp.digits / .period</span><span class="odef">default <b>6 / 30</b></span></div><p class="odesc">Code length and rotation. <b>Changing either invalidates every enrolled application</b>, so treat them as install-time settings.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.totp.window</span><span class="odef">default <b>1</b></span></div><p class="odesc">Steps of clock skew accepted either side. <code>1</code> is ±30 seconds, and raising it widens the guessing window proportionally.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.totp.secret_bytes</span><span class="odef">default <b>32</b></span></div><p class="odesc">Entropy of the shared secret.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.totp.enrollment_ttl</span><span class="odef">default <b>900</b></span></div><p class="odesc">Seconds an unconfirmed secret stays valid.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.enabled</span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_WEBAUTHN_ENABLED</span><p class="odesc">Offer passkeys. Requires <code>https</code>.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.relying_party.id</span><span class="odef">default <b>app host</b></span></div><span class="oenv">NOVA_TWO_FACTOR_WEBAUTHN_RP_ID</span><p class="odesc">The domain credentials bind to. It must equal the host users browse, or be a registrable parent of it; <b>a mismatch makes every passkey fail</b>.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.relying_party.name</span><span class="odef">default <b>null</b></span></div><span class="oenv">NOVA_TWO_FACTOR_WEBAUTHN_RP_NAME</span><p class="odesc">Name shown in the browser prompt.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.origins</span><span class="odef">default <b>app URL</b></span></div><span class="oenv">NOVA_TWO_FACTOR_WEBAUTHN_ORIGINS</span><p class="odesc">Exact origins accepted, compared scheme-host-port with no prefix matching.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.user_verification</span><span class="odef">default <b>preferred</b></span></div><p class="odesc">Whether the authenticator must verify the human. Always forced to <code>required</code> for step-up.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.resident_key</span><span class="odef">default <b>preferred</b></span></div><p class="odesc">Ask for a discoverable credential, which lets a passkey sign in without a username.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.attestation</span><span class="odef">default <b>none</b></span></div><p class="odesc">Attestation conveyance.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.allowed_aaguids</span><span class="odef">default <b>[]</b></span></div><p class="odesc">Allow-list of authenticator models. Empty means any.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.timeout</span><span class="odef">default <b>60</b></span></div><p class="odesc">Seconds the browser prompt stays open.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.on_counter_regression</span><span class="odef">default <b>reject</b></span></div><p class="odesc">What to do when a signature counter goes backwards, which may indicate a cloned key. <code>log</code> accepts and records instead.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.email.enabled</span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_EMAIL_ENABLED</span><p class="odesc">Offer email codes.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.email.digits</span><span class="odef">default <b>6</b></span></div><p class="odesc">Code length.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.email.ttl</span><span class="odef">default <b>300</b></span></div><span class="oenv">NOVA_TWO_FACTOR_EMAIL_TTL</span><p class="odesc">Seconds a code lives.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.email.max_attempts</span><span class="odef">default <b>5</b></span></div><p class="odesc">Wrong guesses before the challenge is burned.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.email.resend_after</span><span class="odef">default <b>60</b></span></div><span class="oenv">NOVA_TWO_FACTOR_EMAIL_RESEND_AFTER</span><p class="odesc">Seconds before another code may be requested.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.email.queue</span><span class="odef">default <b>false</b></span></div><span class="oenv">NOVA_TWO_FACTOR_EMAIL_QUEUE</span><p class="odesc">Queue the mail. Disabled by default, since <b>a queue that is not running turns a login into a dead end</b>.</p></div>
+      </div>
+      <h2 id="cfg-recovery">Recovery codes</h2>
+      <p>Generated on first enrollment, shown once, hashed individually behind a unique index.</p>
+      <div class="optlist">
+        <div class="opt"><div class="ohead"><span class="okey">recovery_codes.count</span><span class="odef">default <b>8</b></span></div><p class="odesc">How many are issued.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">recovery_codes.length</span><span class="odef">default <b>10</b></span></div><p class="odesc">Characters per code.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">recovery_codes.warn_at</span><span class="odef">default <b>3</b></span></div><p class="odesc">Remaining count at which the interface offers regeneration.</p></div>
+      </div>
+      <h2 id="enforcement">Enforcement</h2>
+      <p>Who must enrol, by when, and what happens when they have not.</p>
+      <div class="optlist">
+        <div class="opt"><div class="ohead"><span class="okey">enforcement.mode</span><span class="odef">default <b>optional</b></span></div><span class="oenv">NOVA_TWO_FACTOR_MODE</span><p class="odesc"><code>optional</code>, <code>encouraged</code> or <code>required</code>. Only <code>required</code> blocks.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">enforcement.grace_enabled</span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_GRACE_ENABLED</span><p class="odesc">Whether <code>required</code> grants any runway before it blocks.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">enforcement.grace_mode</span><span class="odef">default <b>days</b></span></div><span class="oenv">NOVA_TWO_FACTOR_GRACE_MODE</span><p class="odesc"><code>days</code> for a runway per account; <code>date</code> for one deadline everybody shares.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">enforcement.grace_days</span><span class="odef">default <b>7</b></span></div><span class="oenv">NOVA_TWO_FACTOR_GRACE_DAYS</span><p class="odesc">With <code>grace_mode: days</code>, the runway each account gets from its <code>created_at</code>.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">enforcement.enforced_from</span><span class="odef">default <b>null</b></span></div><span class="oenv">NOVA_TWO_FACTOR_ENFORCED_FROM</span><p class="odesc">With <code>grace_mode: date</code>, the deadline for everyone.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">enforcement.remind_every_days</span><span class="odef">default <b>7</b></span></div><span class="oenv">NOVA_TWO_FACTOR_REMIND_DAYS</span><p class="odesc">Days that “don't remind me again” lasts under <code>encouraged</code>. <b>The preference is stored against the account rather than the browser.</b></p></div>
+        <div class="opt"><div class="ohead"><span class="okey">enforcement.queue_reminders</span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_QUEUE_REMINDERS</span><p class="odesc">Queue the reminder mail an administrator sends.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">enforcement.remind_cooldown_hours</span><span class="odef">default <b>24</b></span></div><span class="oenv">NOVA_TWO_FACTOR_REMIND_COOLDOWN</span><p class="odesc">Hours before the same recipient may be sent another reminder. The bulk action skips and reports rather than failing the batch.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">enforcement.gate</span><span class="odef">default <b>null</b></span></div><span class="oenv">NOVA_TWO_FACTOR_GATE</span><p class="odesc">Gate ability deciding who is targeted. <code>null</code> targets everyone.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">enforcement.except</span><span class="odef">default <b>[]</b></span></div><p class="odesc">Extra request patterns that stay reachable for a non-compliant user.</p></div>
+      </div>
+      <h2 id="stepup">Step-up</h2>
+      <p>A fresh factor in front of one dangerous action.</p>
+      <div class="optlist">
+        <div class="opt"><div class="ohead"><span class="okey">step_up.ttl</span><span class="odef">default <b>300</b></span></div><span class="oenv">NOVA_TWO_FACTOR_STEP_UP_TTL</span><p class="odesc">Seconds a grant stays fresh.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">step_up.protect</span><span class="odef">default <b>see config</b></span></div><p class="odesc">Scopes requiring a fresh factor, matched against Nova actions and routes.</p></div>
+      </div>
+      <h2 id="devices">Trusted devices</h2>
+      <p>“Don't ask again on this device”, and how long that lasts.</p>
+      <div class="optlist">
+        <div class="opt"><div class="ohead"><span class="okey">trusted_devices.enabled</span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_TRUSTED_DEVICES</span><p class="odesc">Offer “don't ask again on this device”.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">trusted_devices.days</span><span class="odef">default <b>30</b></span></div><span class="oenv">NOVA_TWO_FACTOR_TRUSTED_DEVICE_DAYS</span><p class="odesc">How long that lasts. <b>Never offered when a recovery code was used.</b></p></div>
+        <div class="opt"><div class="ohead"><span class="okey">trusted_devices.cookie</span><span class="odef">default <b>nova_two_factor_device</b></span></div><p class="odesc">Cookie name. Only the token hash is stored.</p></div>
+      </div>
+      <h2 id="cfg-limits">Rate limits</h2>
+      <p>Each limiter is keyed on both the user and the IP address, and whichever trips first wins. Rejections carry a <code>Retry-After</code> header, which the interface countdown reads.</p>
+      <div class="optlist">
+        <div class="opt"><div class="ohead"><span class="okey">rate_limits.challenge</span><span class="odef">default <b>5 user / 60 IP</b></span></div><span class="oenv">NOVA_TWO_FACTOR_LIMIT_CHALLENGE</span><p class="odesc">Decay 60s. Lockout 60s, escalating to 900s.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">rate_limits.step_up</span><span class="odef">default <b>5 user / 60 IP</b></span></div><span class="oenv">NOVA_TWO_FACTOR_LIMIT_STEP_UP</span><p class="odesc">Decay 60s. Lockout 60s, escalating to 900s.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">rate_limits.recovery</span><span class="odef">default <b>10, or 3 malformed / 10 IP</b></span></div><span class="oenv">NOVA_TWO_FACTOR_LIMIT_RECOVERY</span><p class="odesc">Decay 1 hour. Lockout 1 hour, flat. A wrong shape is never a typo, so malformed submissions get a much tighter budget.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">rate_limits.enroll</span><span class="odef">default <b>10 user / 30 IP</b></span></div><span class="oenv">NOVA_TWO_FACTOR_LIMIT_ENROLL</span><p class="odesc">Decay 10 min. Lockout 10 min, escalating to 1 hour.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">rate_limits.otp_send</span><span class="odef">default <b>3 user / 10 IP</b></span></div><span class="oenv">NOVA_TWO_FACTOR_LIMIT_OTP_SEND</span><p class="odesc">Decay 15 min. Lockout 15 min, escalating to 1 hour.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">rate_limits.remind</span><span class="odef">default <b>30 user / 60 IP</b></span></div><span class="oenv">NOVA_TWO_FACTOR_LIMIT_REMIND</span><p class="odesc">Decay 1 hour. Lockout 30 min, escalating to 1 hour.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">rate_limits.webauthn_per_minute</span><span class="odef">default <b>30</b></span></div><span class="oenv">NOVA_TWO_FACTOR_LIMIT_WEBAUTHN</span><p class="odesc">Assertions accepted per minute.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">rate_limits.per_device</span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_PER_DEVICE</span><p class="odesc">Gives a browser that has cleared a challenge before its own budget, so one user's compromised session does not lock out their other devices.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">rate_limits.device_cookie</span><span class="odef">default <b>nova_two_factor_known_device</b></span></div><p class="odesc">Names the cookie carrying that marker.</p></div>
+      </div>
+      <h2 id="other">Other options</h2>
+      <p>Everything else, including the switches that are deliberately not editable from the panel.</p>
+      <div class="optlist">
+        <div class="opt"><div class="ohead"><span class="okey">enabled <span class="lock">env only</span></span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_ENABLED</span><p class="odesc">Turns the whole package off — routes, middleware, card and all. A codebase serving several panels may use this per domain.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">password_confirmation_ttl</span><span class="odef">default <b>900</b></span></div><span class="oenv">NOVA_TWO_FACTOR_PASSWORD_CONFIRMATION_TTL</span><p class="odesc">Seconds a password confirmation stays fresh for destructive operations.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">cookies.secure</span><span class="odef">default <b>null</b></span></div><span class="oenv">NOVA_TWO_FACTOR_SECURE_COOKIES</span><p class="odesc">Force the secure flag. Null follows the session config.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">alerts.lockout_burst.accounts</span><span class="odef">default <b>0</b></span></div><span class="oenv">NOVA_TWO_FACTOR_LOCKOUT_ALERT</span><p class="odesc">Distinct accounts locked out inside the window before <code>LockoutBurstDetected</code> fires. <code>0</code> disables it.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">alerts.lockout_burst.window_minutes</span><span class="odef">default <b>15</b></span></div><span class="oenv">NOVA_TWO_FACTOR_LOCKOUT_ALERT_WINDOW</span><p class="odesc">The window that count is measured over.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">audit.enabled</span><span class="odef">default <b>true</b></span></div><p class="odesc">Write the audit trail.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">audit.queue / .prune_after_days</span><span class="odef">default <b>false / 365</b></span></div><p class="odesc">Queue audit writes; retention for <code>nova-two-factor:prune</code>.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">routes.prefix</span><span class="odef">default <b>two-factor</b></span></div><p class="odesc">Path segment under Nova's own path. <b>Never hardcode it</b> — use <code>Support\Routing::prefix()</code>.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">fortify.supersede_challenge</span><span class="odef">default <b>true</b></span></div><p class="odesc">Take over Nova's login-pipeline divert.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">settings.editable</span><span class="odef">default <b>false</b></span></div><span class="oenv">NOVA_TWO_FACTOR_SETTINGS</span><p class="odesc">Let administrators change policy from the panel.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">settings.pause_max_minutes</span><span class="odef">default <b>120</b></span></div><span class="oenv">NOVA_TWO_FACTOR_PAUSE_MAX</span><p class="odesc">Longest pause the panel will offer.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">nova.compliance.enabled</span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_COMPLIANCE</span><p class="odesc">Register the compliance dashboard.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">nova.compliance.models</span><span class="odef">default <b>[]</b></span></div><span class="oenv">NOVA_TWO_FACTOR_COMPLIANCE_MODELS</span><p class="odesc">Populations compliance is measured against. Empty means the model behind Nova's guard.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">nova.menu.show</span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_MENU</span><p class="odesc">Add the menu group automatically.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">nova.menu.label / .icon</span><span class="odef">default <b>Two-factor / lock-closed</b></span></div><p class="odesc">How that group reads.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">nova.menu.badge</span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_MENU_BADGE</span><p class="odesc">Show the overdue count on the group.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">nova.admin_gate <span class="lock">env only</span></span><span class="odef">default <b>nova-two-factor:admin</b></span></div><span class="oenv">NOVA_TWO_FACTOR_ADMIN_GATE</span><p class="odesc">Gate guarding the administration pages and the reset action. Undefined abilities deny, so <b>these start closed</b>. <code>null</code> opens them to any Nova user.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">nova.replace_nova_card</span><span class="odef">default <b>true</b></span></div><p class="odesc">Substitute this package's card for Nova's own.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">ui.show_method_tradeoffs</span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_SHOW_TRADEOFFS</span><p class="odesc">Show each factor's trade-off where a user picks one.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">database.connection / .tables.* <span class="lock">env only</span></span><span class="odef">default <b>null / defaults</b></span></div><p class="odesc">Where the tables live, for applications keeping auth data on their own connection.</p></div>
+      </div>
+      <div class="cal n hidden" id="cfgnores"><span class="i">i</span><p>No option matches that search.</p></div>
+      <div class="cal d"><span class="i">!</span><p><b><code>enforcement.except</code> is the most dangerous option in this package.</b> Patterns are matched with <code>Str::is</code>, so <code>*</code> crosses slashes: <code>['nova-api/*']</code> leaves every resource, action and metric endpoint open while the pages still redirect. Nothing errors and nothing is logged. <code>nova-two-factor:doctor</code> prints the effective list and fails on any pattern that reaches the dashboard, a resource page or the Nova API.</p></div>
+      <div class="cal w"><span class="i">!</span><p><code>NOVA_TWO_FACTOR_ENABLED=false</code> is legitimate — a multi-domain install turns the package off per domain — so <code>doctor</code> reports it as valid and no test fails. An application with it set is indistinguishable from one without the package. To unblock local work, pause from the Settings page instead.</p></div>
+
+      <h2 id="builder">Configuration builder</h2>
+      <p>Every option above that has an environment variable — all 44 of them — is here. The <code>.env</code> is generated live and contains <b>only the values that differ from the defaults</b>, because everything else is already what the package ships.</p>
+
+      <div class="builder" id="cfgbuilder"></div>
+    </section>
+
+    <!-- METHODS -->
+    <section class="page hidden" data-page="methods">
+      <p class="phint" style="margin-top:0">A user may hold more than one method. The challenge screen offers whatever they actually have, strongest first, so losing a phone does not mean losing the account.</p>
+
+      <h2 id="where">Where users manage their methods</h2>
+      <p>Users manage their own methods on Nova's existing <b>User Security</b> page. This package replaces Nova's two-factor card in place, so there is nothing extra to link to and it inherits Nova's user-menu entry.</p>
+      <p>The challenge, step-up and enrollment screens are server-rendered Blade pages rather than Inertia pages, and work with JavaScript disabled.</p>
+      <div class="cal n"><span class="i">i</span><p>A tool-registered Inertia page never resolves on a cold load, and a challenge is always a cold load — Nova resolves its initial component before any tool script runs.</p></div>
+
+      <h2 id="totp">Authenticator applications</h2>
+      <p>Enabled by default. The QR code is generated locally as an inline SVG, and the setup key is always offered as text — so enrollment works on a machine with no camera and with a screen reader.</p>
+      <p>Secrets are 160-bit, stored under an <code>encrypted</code> cast, and never written to a URL or a log.</p>
+      <div class="cal n"><span class="i">i</span><p>Each accepted code is recorded and refused on reuse. Replay protection lives in the database rather than the cache, because a cache flush must not reopen a window an attacker is already inside.</p></div>
+
+      <h2 id="webauthn">Passkeys</h2>
+      <p>Passkeys require <code>https</code> and a relying-party ID matching your host.</p>
+<pre>// config/nova-two-factor.php
+'methods' => [
+    'webauthn' => [
+        'enabled' => true,
+        'relying_party' => ['id' => null], // defaults to the host of app.url
+        'origins' => [],                   // defaults to [app.url]
+    ],
+],</pre>
+      <p>The relying-party ID is derived from <code>config('app.url')</code>, <b>never from the request <code>Host</code> header</b>, and is validated at boot as a registrable parent of your application host.</p>
+      <p>Credentials are stored <code>encrypted:json</code> and looked up by SHA-256 of the credential ID. Install <code>ext-sodium</code> if you want to accept Ed25519 authenticators.</p>
+      <div class="cal w"><span class="i">!</span><p>Where Nova has a domain of its own, <code>APP_URL</code> names the customer application rather than the panel — which silently produces a relying party your users cannot assert against. <code>nova-two-factor:doctor</code> prints the one it derived; if that is the customer domain, set <code>NOVA_TWO_FACTOR_WEBAUTHN_RP_ID</code> and <code>NOVA_TWO_FACTOR_WEBAUTHN_ORIGINS</code>.</p></div>
+
+      <h2 id="email">Email codes</h2>
+      <p>Email codes require a working mailer and are labelled in the interface as <b>the weakest option</b>, since anyone with the user's inbox has their second factor.</p>
+      <p>Adding an email method sends a code to the address and only counts it once that code comes back — so an attacker holding the password cannot point a second factor at their own inbox.</p>
+      <p>Codes are HMAC-SHA256 keyed on <code>APP_KEY</code>, single-use, with a short TTL. The notification is <em>not</em> queued by default: a login code that arrives two minutes late is a support ticket, not a security feature.</p>
+      <div class="cal n"><span class="i">i</span><p>SMS is not included. The <code>OtpTransport</code> contract is the documented extension point — see <a href="#/extending">Extending</a>.</p></div>
+
+      <h2 id="recovery">Recovery codes</h2>
+      <p>Generated on first enrollment, shown once, and stored hashed individually with SHA-256 behind a unique index. The package cannot show them again, and says so where they are displayed; the user may copy, download or print them at that moment.</p>
+      <p>The security card tracks them as a row of ticks, struck through as they are spent, and offers regeneration at <code>recovery_codes.warn_at</code> remaining.</p>
+      <div class="cal g"><span class="i">✓</span><p>Using a recovery code signs the user in. <b>It does not turn two-factor authentication off</b> — which is the behaviour most implementations get wrong, and the one that turns a lost phone into an unprotected account.</p></div>
+
+      <h2 id="mail">Links in mail</h2>
+      <p>Mail sent by this package links to Nova's user security page, and that link is <b>not built from <code>APP_URL</code></b>. Where Nova has a domain of its own, <code>APP_URL</code> names the customer application instead of the panel.</p>
+      <div class="tw"><table>
+        <thead><tr><th>Order</th><th>Source</th><th>Available when</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>The host the mail was sent from</td><td>There is a request behind it</td></tr>
+          <tr><td>2</td><td><code>nova.domain</code></td><td>Always, if you set it</td></tr>
+          <tr><td>3</td><td><code>APP_URL</code></td><td>Last resort</td></tr>
+        </tbody>
+      </table></div>
+      <div class="cal w"><span class="i">!</span><p>Set <code>nova.domain</code> if you send reminders from a job. A queued notification has no request behind it, so step 1 is unavailable and the link falls through to <code>APP_URL</code> — the customer site.</p></div>
+
+      <h2 id="method-tradeoffs">Trade-offs, shown to the user</h2>
+      <p>Wherever a user picks a factor, each option carries a one-line description and, on its own line, its trade-off — because a list without it reads as three equivalent options when it is not.</p>
+      <div class="tw"><table>
+        <thead><tr><th>Method</th><th>Trade-off shown</th></tr></thead>
+        <tbody>
+          <tr><td>Passkey</td><td><b>Cannot be phished.</b></td></tr>
+          <tr><td>Authenticator app</td><td><b>Works offline.</b></td></tr>
+          <tr><td>Email code</td><td><b>Weakest option — anyone with your inbox has your second factor.</b></td></tr>
+        </tbody>
+      </table></div>
+      <p>These are shown by default. If you would rather not put them in front of your users, you may disable them.</p>
+<pre>// config/nova-two-factor.php
+'ui' => [
+    'show_method_tradeoffs' => false,
+],</pre>
+      <p>The descriptions remain; only the trade-off line disappears. Both come from <code>MethodType</code>, so they are translatable and identical across every screen.</p>
+    </section>
+
+    <!-- ENFORCEMENT -->
+    <section class="page hidden" data-page="enforcement">
+      <h2 id="modes">Modes</h2>
+      <div class="tw"><table>
+        <thead><tr><th>Mode</th><th>Behaviour</th><th>Blocks?</th></tr></thead>
+        <tbody>
+          <tr><td><code>optional</code></td><td>Nothing required, nothing shown.</td><td><span class="bdg g">no</span></td></tr>
+          <tr><td><code>encouraged</code></td><td>A dismissible prompt.</td><td><span class="bdg">never</span></td></tr>
+          <tr><td><code>required</code></td><td>Nova is unreachable until enrolled, once grace expires.</td><td><span class="bdg b">yes</span></td></tr>
+        </tbody>
+      </table></div>
+<pre>NovaTwoFactor::make()-&gt;<span class="k">enforce</span>(<span class="s">'required'</span>, graceDays: 14);</pre>
+      <h2 id="grace">Grace</h2>
+      <p>Set <code>grace_enabled</code> to <code>false</code> and the wall appears at the next request. Otherwise <code>grace_mode</code> decides the deadline: <code>days</code> measures each account's <code>created_at</code> plus <code>grace_days</code>; <code>date</code> uses <code>enforced_from</code> for everyone at once.</p>
+      <h2 id="try">Try it</h2>
+      <p>Pick a policy and an account, and see which screen that user would get.</p>
+      <div class="play">
+        <div class="pgrid">
+          <div class="fld"><label for="pl-mode">Mode</label><select id="pl-mode"><option value="optional">optional</option><option value="encouraged">encouraged</option><option value="required" selected>required</option></select></div>
+          <div class="fld"><label for="pl-gmode">Grace mode</label><select id="pl-gmode"><option value="days" selected>days</option><option value="date">date</option></select></div>
+          <div class="fld"><label for="pl-days">Grace days</label><input id="pl-days" type="number" min="0" max="90" value="14"></div>
+          <div class="fld"><label for="pl-age">Account age (days)</label><input id="pl-age" type="number" min="0" max="365" value="3"></div>
+          <div class="fld"><label for="pl-has">Has a factor?</label><select id="pl-has"><option value="no" selected>no</option><option value="yes">yes</option></select></div>
+        </div>
+        <div class="verdict" id="pl-out"></div>
+        <pre id="pl-env" style="margin-top:18px"></pre>
+      </div>
+      <h2 id="target">Targeting</h2>
+<pre>NovaTwoFactor::make()-&gt;<span class="k">requireFor</span>(fn ($user) =&gt; $user-&gt;hasRole(<span class="s">'admin'</span>));</pre>
+      <p>Or name a gate, keeping role logic in the authorization layer you already use: <code>'enforcement' =&gt; ['gate' =&gt; 'require-two-factor']</code>.</p>
+    </section>
+
+    <!-- STEP-UP -->
+    <section class="page hidden" data-page="step-up">
+      <h2 id="stepup-what">What it is</h2>
+      <p>A second challenge immediately before a dangerous action, even though the user is already signed in.</p>
+      <p>You may demand a fresh factor in front of a single action:</p>
+<pre>NovaTwoFactor::make()->protectWithStepUp('users.destroy', [
+    'DELETE nova-api/users/*',
+]);</pre>
+      <p>Or per route:</p>
+<pre>Route::delete('/danger', DangerController::class)
+    ->middleware('nova.2fa.step-up:danger');</pre>
+
+      <h2 id="grants">How a grant works</h2>
+      <p>A grant is HMAC-signed over the session, user, scope and expiry, so <b>proving yourself for one scope never unlocks another</b>. Re-authenticating to delete a user does not silently authorise exporting the database.</p>
+      <p>Grants expire after <code>step_up.ttl</code> seconds — 300 by default.</p>
+      <div class="cal n"><span class="i">i</span><p>XHR requests receive a <b>423</b> response with <code>step_up_required</code>, mirroring Laravel's own <code>RequirePassword</code>, and the original request is replayed once the grant is issued.</p></div>
+      <div class="cal g"><span class="i">✓</span><p>Passkey users have user verification forced to <code>required</code> here, whatever the configuration says. A dangerous action deserves the biometric or PIN, not merely possession of the key.</p></div>
+
+      <h2 id="config">Configuration</h2>
+<pre>// config/nova-two-factor.php
+'step_up' => [
+    'ttl' => 300,
+    'protect' => ['nova-api/users/*/delete'],
+],</pre>
+    </section>
+
+    <!-- ADMINISTRATION -->
+    <section class="page hidden" data-page="administration">
+      <h2 id="pages">Three pages</h2>
+      <div class="tw"><table>
+        <thead><tr><th>Page</th><th>URL</th><th>Answers</th></tr></thead>
+        <tbody>
+          <tr><td>Overview</td><td class="key">/dashboards/two-factor-compliance</td><td>Are we covered, and who do I chase?</td></tr>
+          <tr><td>Settings</td><td class="key">/dashboards/two-factor-settings</td><td>What are the rules, and can I change them?</td></tr>
+          <tr><td>Activity</td><td class="key">/resources/two-factor-audits</td><td>What happened, and who did it?</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2 id="gate">They start closed</h2>
+      <p><code>nova.admin_gate</code> points at <code>nova-two-factor:admin</code>, an ability no fresh application defines, and <code>Gate::allows()</code> denies an undefined ability. Until you say who may see them, nobody can — and the menu entry does not render.</p>
+<pre>Gate::define('nova-two-factor:admin', fn ($user) => $user->isAdmin());</pre>
+      <p>You may point the option at an ability you already have, or set it to <code>null</code> to open the pages to every user who can reach Nova.</p>
+
+      <h2 id="overview-dashboard">The Overview dashboard</h2>
+      <p>One card, read from top to bottom.</p>
+      <ul>
+        <li>An enrollment ring and a coverage strip.</li>
+        <li>The method mix and failed attempts over the last thirty days.</li>
+        <li>Six resilience figures: single-factor accounts, recovery-code health, time to enrol, stale enrollments, trusted devices in force, and lockouts.</li>
+        <li>The phishing-resistant trend and recent recovery-code sign-ins.</li>
+        <li>The queue of users to chase, overdue first.</li>
+        <li>Recent administrator actions: reminders, resets and exemptions.</li>
+      </ul>
+      <p>Each figure carries a <b>?</b> describing what it answers, and clicking a resilience tile filters the queue to the accounts it counts. Each row's <code>…</code> menu opens the user's Nova resource, sends a reminder, or resets their two-factor — the last requiring their email address typed out, a written reason, and your password.</p>
+      <div class="cal n"><span class="i">i</span><p>The sections rendered depend on your enforcement mode: figures that cannot be true in the current mode are neither sent nor computed. Each mode adds one figure of its own — <i>blocked at the door</i> under <code>required</code>, <i>reminders sent</i> under <code>encouraged</code>, and <i>new enrollments</i> under <code>optional</code>.</p></div>
+      <p>You may disable the dashboard with <code>nova.compliance.enabled</code>, and the menu badge alone with <code>nova.menu.badge</code>.</p>
+
+      <h2 id="measured">Choosing which users are measured</h2>
+      <p>Every figure is measured against the model behind Nova's guard. On a panel only administrators can reach, that counts people who can never sign in to Nova. You may name the populations instead.</p>
+<pre>'nova' => [
+    'compliance' => ['models' => [App\Models\Admin::class]],
+],</pre>
+      <p>Class names only, since <code>config:cache</code> cannot serialise a closure. To narrow a population, register it on the tool:</p>
+<pre>NovaTwoFactor::make()
+    ->audit(Admin::class)
+    ->audit(User::class, fn ($query) => $query->where('active', true));</pre>
+      <p>Both sources are merged, and a runtime registration wins over a configured one for the same class.</p>
+
+      <h2 id="settings">The Settings page</h2>
+      <p>Disabled by default. A fresh installation should not hand everyone who reaches Nova the ability to weaken two-factor policy.</p>
+<pre>NOVA_TWO_FACTOR_SETTINGS=true</pre>
+      <p>With it enabled, an administrator may change the enforcement mode and grace, the methods that may be enrolled, the email-code lifetime, trusted devices, the step-up window, and two interface options. Every write is password-confirmed and audited with both values, and the page shows the last five changes.</p>
+      <p>The form reshapes as you answer it: settings that do nothing in the chosen mode are not shown, and settings that depend on another appear with it. Switching to <code>required</code> displays what it would cost before you save — <i>“would block 13 of 14 administrators”</i> — and at least one method must remain enabled, which is refused in the interface and again in the endpoint.</p>
+      <div class="cal n"><span class="i">i</span><p>Panel values take precedence over <code>.env</code>, which takes precedence over the shipped defaults. Where the panel and your environment disagree, the field is marked, and <b>Restore defaults</b> clears every stored value at once.</p></div>
+      <p>Some options are deliberately not editable from the panel, among them <code>enabled</code>, <code>nova.admin_gate</code>, <code>webauthn.relying_party.*</code>, <code>database.*</code> and the rate limits. The allow-list lives in <code>Settings\SettingSchema</code>.</p>
+
+      <h2 id="pause">Pausing enforcement</h2>
+      <p>The Settings page can pause enforcement: nobody is challenged, while the administration pages keep working. This is the intended way to fix a misconfigured factor, since a broken second factor is exactly when an administrator cannot reach the page that fixes it.</p>
+      <p>Every pause carries a duration, capped by <code>settings.pause_max_minutes</code>, and expires on its own. It is stored in the database rather than the cache, so a cache flush cannot silently re-arm the gate, and it records who paused it and why. Pausing does not clear anyone's verified session.</p>
+      <div class="cal g"><span class="i">✓</span><p>Use the pause rather than <code>NOVA_TWO_FACTOR_ENABLED=false</code> to unblock local work. A pause is bounded, attributed and audited; the env switch is none of those.</p></div>
+
+      <h2 id="activity">The Activity log</h2>
+      <p>Every audited event is available as a read-only Nova resource at <code>/resources/two-factor-audits</code>, reached from the two pages above. It is read-only in all four directions: an audit trail an administrator can edit is not an audit trail.</p>
+      <p>The log is filtered to administrator actions by default. <i>Worth a second look</i> narrows it to suspicious events, and <i>Everything</i> removes the filter. Each row reads as a sentence — <i>“Reminder sent to Priya Raman by Alex Morgan”</i> — and the badge is coloured by severity.</p>
+
+      <h2 id="menu">The menu</h2>
+      <p>Registering the tool adds a <b>Two-factor</b> group displaying the number of users past their grace period as a badge. <i>Settings</i> appears only when <code>settings.editable</code> is enabled, and <i>Activity</i> is otherwise hidden from navigation. You may rename the group with <code>nova.menu.label</code>, change its icon with <code>nova.menu.icon</code>, or remove it with <code>nova.menu.show</code>; the pages stay registered and reachable by URL.</p>
+      <div class="cal d"><span class="i">!</span><p>If your application calls <code>Nova::mainMenu()</code>, none of this appears. A custom main menu replaces Nova's default one entirely, and tool menus are only collected for the default — so the group is dropped with no error.</p></div>
+
+      <h2 id="menu-place">Placing the menu entry yourself</h2>
+      <p>Switch the automatic entry off and place it wherever you like. The pages stay registered either way.</p>
+<pre>'nova' => ['menu' => ['show' => false]],</pre>
+<pre>use Gabrielesbaiz\NovaTwoFactor\NovaTwoFactor;
+
+Nova::mainMenu(fn ($request) => [
+    MenuSection::dashboard(Main::class)->icon('chart-bar'),
+
+    MenuGroup::make(__('Two-factor'), NovaTwoFactor::menuItems()),
+    MenuItem::resource(User::class),
+
+    NovaTwoFactor::menuSection(),   // or the whole group as a top-level entry
+]);</pre>
+      <p><code>menuItems()</code> returns Overview, Settings (when editing is enabled) and Activity; <code>menuItem()</code> returns the first alone. Every helper carries its destination's own authorization, so placing an entry by hand cannot expose it to someone the gate would have refused. <code>NovaTwoFactor::make()->withoutMenu()</code> is the fluent equivalent of the configuration option.</p>
+
+      <h2 id="resources">Resources, fields and actions</h2>
+<pre>use Gabrielesbaiz\NovaTwoFactor\Nova\Actions\ResetTwoFactorAuthentication;
+use Gabrielesbaiz\NovaTwoFactor\Nova\Actions\RevokeTrustedDevices;
+use Gabrielesbaiz\NovaTwoFactor\Nova\Actions\SendEnrollmentReminder;
+use Gabrielesbaiz\NovaTwoFactor\Nova\Fields\TwoFactorStatus;
+use Gabrielesbaiz\NovaTwoFactor\Nova\Metrics\TwoFactorAdoption;
+use Gabrielesbaiz\NovaTwoFactor\Nova\Metrics\TwoFactorFailures;
+use Gabrielesbaiz\NovaTwoFactor\Nova\Metrics\TwoFactorMethodMix;
+
+public function fields(NovaRequest $request): array
+{
+    return [
+        // Sortable via subquery, so it does not N+1 a large index.
+        TwoFactorStatus::make(),
+    ];
+}
+
+public function actions(NovaRequest $request): array
+{
+    return [
+        ResetTwoFactorAuthentication::make(), // requires a written reason
+        SendEnrollmentReminder::make(),       // mails whoever has not enrolled
+        RevokeTrustedDevices::make(),
+    ];
+}
+
+public function cards(NovaRequest $request): array
+{
+    return [
+        new TwoFactorAdoption(User::class),
+        new TwoFactorMethodMix,
+        new TwoFactorFailures,
+    ];
+}</pre>
+      <p><code>SendEnrollmentReminder</code> mails the users who have not enrolled, skipping anyone who has. The mail carries their own grace deadline under <code>required</code>, quotes an optional note as coming from the administrator who sent it, and every send is audited.</p>
+    </section>
+
+    <!-- EXTENDING -->
+    <section class="page hidden" data-page="extending">
+      <h2 id="events">Events</h2>
+      <p>Every meaningful transition fires an event you can listen for.</p>
+      <div class="tw"><table>
+        <thead><tr><th>Event</th><th>Fired when</th></tr></thead>
+        <tbody>
+          <tr><td class="key">EnrollmentReminderSent</td><td>A reminder mail goes out.</td></tr>
+          <tr><td class="key">ReminderSnoozed</td><td>A user silences the prompt.</td></tr>
+          <tr><td class="key">SettingChanged</td><td>A policy value is edited from the panel.</td></tr>
+          <tr><td class="key">EnforcementPaused</td><td>Enforcement is stood down temporarily.</td></tr>
+          <tr><td class="key">EnforcementResumed</td><td>A pause ends, by hand or by expiry.</td></tr>
+          <tr><td class="key">LockoutBurstDetected</td><td>Distinct lockouts cross the alert threshold.</td></tr>
+        </tbody>
+      </table></div>
+      <h2 id="driver">Register your own factor type</h2>
+<pre>use Gabrielesbaiz\NovaTwoFactor\Facades\TwoFactor;
+
+TwoFactor::extend('yubico-otp', fn ($app) => new YubicoDriver(...));</pre>
+      <p>Implement <code>Contracts\TwoFactorMethodDriver</code>.</p>
+      <div class="cal w"><span class="i">!</span><p>Enrollment must be idempotent for the lifetime of a pending enrollment, or refreshing the setup page will invalidate the QR code the user has just scanned.</p></div>
+
+      <h2 id="transport">Other OTP transports</h2>
+      <p>SMS is not included. Implement the <code>OtpTransport</code> contract to send codes over another channel — the reasoning and the full contract are in <a href="https://github.com/gabrielesbaiz/nova-two-factor/blob/main/DESIGN.md">DESIGN.md</a>.</p>
+
+      <h2 id="urls">Building URLs</h2>
+      <div class="cal w"><span class="i">!</span><p>Never hardcode <code>/two-factor/…</code>. The segment is <code>routes.prefix</code>. Use <code>Support\Routing::prefix()</code> and <code>Support\PanelUrl</code>; the SPA reads it from card meta.</p></div>
+    </section>
+
+    <!-- SECURITY -->
+    <section class="page hidden" data-page="security">
+      <h2 id="storage">What is stored, and how</h2>
+      <div class="tw"><table>
+        <thead><tr><th>Control</th><th>Implementation</th></tr></thead>
+        <tbody>
+          <tr><td>TOTP secrets</td><td><code>encrypted</code> cast, 160-bit, never in a URL or log</td></tr>
+          <tr><td>Recovery codes</td><td>SHA-256, individually, unique index, single-use</td></tr>
+          <tr><td>Email codes</td><td>HMAC-SHA256 keyed on <code>APP_KEY</code>, single-use, short TTL</td></tr>
+          <tr><td>Passkey credentials</td><td><code>encrypted:json</code>; lookup by SHA-256 of the credential ID</td></tr>
+          <tr><td>Trusted devices</td><td>64-character token, only its hash stored</td></tr>
+          <tr><td>Step-up grants</td><td>HMAC over session, user, scope and expiry</td></tr>
+          <tr><td>QR codes</td><td>Generated locally. There is no remote code path.</td></tr>
+        </tbody>
+      </table></div>
+      <h2 id="verified">Verified sessions</h2>
+      <p>Routes that issue or destroy a factor require a <b>verified session</b> — a cleared challenge, not merely a confirmed password. The only exception is an account with nothing enrolled yet, which has no second factor to prove.</p>
+      <div class="cal n"><span class="i">i</span><p>A password confirmation is not a substitute. The attacker this defends against is holding the password already; without the second check they could enrol a factor of their own and lock the real owner out.</p></div>
+      <h2 id="limits">Rate limiting</h2>
+      <p>Two independent ceilings apply to every guarded route: one keyed on the user, one on the IP. The user limit stops a targeted attack; the IP limit stops one host spraying many accounts. Lockouts double up to a ceiling.</p>
+      <h2 id="audit">The audit trail</h2>
+      <p>Every enrollment, challenge, lockout, replay, reset and device change is recorded. Codes, secrets, credentials and destinations never are — a guard throws outside production if a payload even looks like it carries one.</p>
+    </section>
+
+    <!-- COMMANDS -->
+    <section class="page hidden" data-page="commands">
+      <h2 id="cmds">Commands</h2>
+      <div class="tw"><table>
+        <thead><tr><th>Command</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td class="key">nova-two-factor:doctor</td><td>Check the configuration. Non-zero exit on failure.</td></tr>
+          <tr><td class="key">nova-two-factor:reset {user}</td><td>Break-glass reset: methods, codes, devices, lockouts, sessions and reminder snooze. Accepts <code>--force</code> and <code>--ip=</code>.</td></tr>
+          <tr><td class="key">nova-two-factor:prune</td><td>Remove expired challenges, devices and old audit rows.</td></tr>
+          <tr><td class="key">nova-two-factor:upgrade</td><td>Port 1.x <code>nova_twofa</code> data. See the upgrade guide.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2 id="schedule">Schedule the prune</h2>
+<pre>Schedule::command('nova-two-factor:prune')->daily();</pre>
+
+      <h2 id="testing">Testing</h2>
+<pre>composer test        # Pest
+composer analyse     # PHPStan
+composer format      # Pint</pre>
+      <div class="cal g"><span class="i">✓</span><p>The suite includes a regression test for every vulnerability found in 1.x.</p></div>
+    </section>
+
+    <!-- TROUBLESHOOTING -->
+    <section class="page hidden" data-page="troubleshooting">
+      <h2 id="lockout">Everyone is locked out at once</h2>
+      <p>Several lockouts at once usually means somebody is working through a list of stolen passwords. They cannot get in; under <code>required</code> they can keep others out.</p>
+      <ul>
+        <li><b>Trusted devices keep working.</b> A browser that has already cleared a challenge is unaffected.</li>
+        <li><b>Lockouts expire</b> after <code>rate_limits.challenge.lockout</code> seconds, rising to <code>lockout_ceiling</code>. Nobody has to clear anything.</li>
+        <li><b>An administrator may free one account now</b> by resetting its second factor from the Overview dashboard.</li>
+        <li><b><code>php artisan nova-two-factor:reset user@example.com</code></b> does the same from the command line, and also clears that user's rate-limit buckets.</li>
+      </ul>
+      <p>To hear about it rather than discover it, set a threshold and listen for <code>LockoutBurstDetected</code>:</p>
+<pre>'alerts' => ['lockout_burst' => ['accounts' => 5, 'window_minutes' => 15]],</pre>
+
+      <h2 id="invalid">Codes are always invalid</h2>
+      <p>Clock skew, nearly always. TOTP codes are derived from the current time, so a phone whose clock has drifted generates codes the server rejects. Set the device clock to automatic. You may widen the window if you must — each step is 30 seconds either way:</p>
+<pre>'methods' => ['totp' => ['window' => 2]],</pre>
+
+      <h2 id="nopasskey">Passkeys aren't offered</h2>
+      <p>Run <code>php artisan nova-two-factor:doctor</code>. Almost always one of:</p>
+      <ul>
+        <li><code>app.url</code> is not <code>https</code> (<code>localhost</code> is exempt)</li>
+        <li>the relying-party ID is not a registrable parent of the host you are browsing</li>
+        <li>the browser has no platform authenticator</li>
+      </ul>
+
+      <h2 id="selflock">I'm locked out of my own admin panel</h2>
+<pre>php artisan nova-two-factor:reset admin@example.com</pre>
+      <p>This clears every method, recovery code and trusted device, every rate-limit bucket keyed to that user, every session predating the reset, and any reminder snooze. An audit row is written and attributed.</p>
+      <div class="cal n"><span class="i">i</span><p>There is deliberately no way to do this from inside the panel you cannot reach.</p></div>
+<pre># No prompt, for scripts and support tooling.
+php artisan nova-two-factor:reset admin@example.com --force
+
+# Clear an address the audit trail does not know about.
+php artisan nova-two-factor:reset admin@example.com --ip=203.0.113.7</pre>
+
+      <h2 id="unstyled">The UI looks unstyled after upgrading</h2>
+      <p>Republish the assets:</p>
+<pre>php artisan vendor:publish --tag=nova-two-factor-assets --force
+php artisan vendor:publish --tag=nova-assets --force</pre>
+
+      <h2 id="menu-missing">The menu group does not appear</h2>
+      <p>Your application almost certainly calls <code>Nova::mainMenu()</code>. A custom main menu replaces Nova's default one entirely, and tool menus are only collected for the default — so the group is dropped silently. Place the entries yourself with <code>NovaTwoFactor::menuItems()</code>.</p>
+
+      <h2 id="p423">Clicking a destructive button does nothing</h2>
+      <p>The route returned <b>423 Locked</b> — it needs a password confirmation, and Nova has no global interceptor for that status. Wrap the control in <code>&lt;ConfirmsPassword&gt;</code>.</p>
+
+      <h2 id="english">Strings render in English</h2>
+      <p>Translations register during <code>Nova::serving()</code>, because the locale at boot is still <code>app.locale</code>. Queued notifications capture the locale at construction for the same reason — a worker has no request to read one from.</p>
+
+      <h2 id="spin">The challenge screen spins forever</h2>
+      <p>Publish the assets: <code>php artisan vendor:publish --tag=nova-two-factor-assets --force</code>. The pre-authentication screens render outside Nova's shell and load their own bundle from <code>public/</code>.</p>
+    </section>
+
+    <!-- SCREENS -->
+    <section class="page hidden" data-page="screens">
+      <h2 id="compare">Drag to compare</h2>
+      <p>The package ships every screen in both themes. Drag the handle — or use the switch in the header to flip the whole page and the gallery with it.</p>
+      <div class="compare">
+        <div class="cmpwrap" id="cmp">
+          <img src="shots/admin-overview-dark.png" alt="Compliance overview, dark theme">
+          <div class="over"><img src="shots/admin-overview-light.png" alt="Compliance overview, light theme"></div>
+          <div class="handle"></div>
+          <span class="cmplab l">Light</span><span class="cmplab r">Dark</span>
+        </div>
+        <div class="cmpfoot">Compliance overview — the same page, both themes, pixel for pixel.</div>
+      </div>
+
+      <h2 id="all">All screens</h2>
+      <div class="gfilter" id="gfilter">
+        <button class="chip on" data-g="all" type="button">All</button>
+        <button class="chip" data-g="challenge" type="button">Challenge</button>
+        <button class="chip" data-g="enroll" type="button">Enrollment</button>
+        <button class="chip" data-g="admin" type="button">Administration</button>
+        <button class="chip" data-g="user" type="button">User</button>
+      </div>
+      <div class="gal" id="gal">
+        <figure class="gitem" data-area="challenge"><div class="fr"><img class="s-light" src="shots/challenge-methods-light.png" alt="Challenge methods" loading="lazy"><img class="s-dark" src="shots/challenge-methods-dark.png" alt="Challenge methods" loading="lazy"></div><figcaption><b>Challenge — methods</b>Whatever the user holds.</figcaption></figure>
+        <figure class="gitem" data-area="challenge"><div class="fr"><img class="s-light" src="shots/challenge-totp-light.png" alt="TOTP challenge" loading="lazy"><img class="s-dark" src="shots/challenge-totp-dark.png" alt="TOTP challenge" loading="lazy"></div><figcaption><b>Challenge — authenticator</b>Six digits.</figcaption></figure>
+        <figure class="gitem" data-area="challenge"><div class="fr"><img class="s-light" src="shots/challenge-passkey-light.png" alt="Passkey challenge" loading="lazy"><img class="s-dark" src="shots/challenge-passkey-dark.png" alt="Passkey challenge" loading="lazy"></div><figcaption><b>Challenge — passkey</b>Nothing to type.</figcaption></figure>
+        <figure class="gitem" data-area="challenge"><div class="fr"><img class="s-light" src="shots/challenge-email-light.png" alt="Email challenge" loading="lazy"><img class="s-dark" src="shots/challenge-email-dark.png" alt="Email challenge" loading="lazy"></div><figcaption><b>Challenge — email code</b>With a resend cooldown.</figcaption></figure>
+        <figure class="gitem" data-area="challenge"><div class="fr"><img class="s-light" src="shots/challenge-recovery-light.png" alt="Recovery challenge" loading="lazy"><img class="s-dark" src="shots/challenge-recovery-dark.png" alt="Recovery challenge" loading="lazy"></div><figcaption><b>Challenge — recovery code</b>Single-use.</figcaption></figure>
+        <figure class="gitem" data-area="enroll"><div class="fr"><img class="s-light" src="shots/enrollment-light.png" alt="Enrollment" loading="lazy"><img class="s-dark" src="shots/enrollment-dark.png" alt="Enrollment" loading="lazy"></div><figcaption><b>Enrollment — in grace</b>A countdown to their deadline.</figcaption></figure>
+        <figure class="gitem" data-area="enroll"><div class="fr"><img class="s-light" src="shots/enrollment-required-light.png" alt="Enrollment required" loading="lazy"><img class="s-dark" src="shots/enrollment-required-dark.png" alt="Enrollment required" loading="lazy"></div><figcaption><b>Enrollment — past grace</b>Nova is unreachable.</figcaption></figure>
+        <figure class="gitem" data-area="enroll"><div class="fr"><img class="s-light" src="shots/totp-enrollment-light.png" alt="TOTP enrollment" loading="lazy"><img class="s-dark" src="shots/totp-enrollment-dark.png" alt="TOTP enrollment" loading="lazy"></div><figcaption><b>Enrollment — authenticator</b>QR generated locally.</figcaption></figure>
+        <figure class="gitem" data-area="user"><div class="fr"><img class="s-light" src="shots/security-card-light.png" alt="Security card" loading="lazy"><img class="s-dark" src="shots/security-card-dark.png" alt="Security card" loading="lazy"></div><figcaption><b>Security card</b>Self-service factor management.</figcaption></figure>
+        <figure class="gitem" data-area="user"><div class="fr"><img class="s-light" src="shots/step-up-light.png" alt="Step-up" loading="lazy"><img class="s-dark" src="shots/step-up-dark.png" alt="Step-up" loading="lazy"></div><figcaption><b>Step-up</b>Before a dangerous action.</figcaption></figure>
+        <figure class="gitem" data-area="admin"><div class="fr"><img class="s-light" src="shots/admin-overview-light.png" alt="Overview" loading="lazy"><img class="s-dark" src="shots/admin-overview-dark.png" alt="Overview" loading="lazy"></div><figcaption><b>Overview</b>Adoption, method mix, the queue.</figcaption></figure>
+        <figure class="gitem" data-area="admin"><div class="fr"><img class="s-light" src="shots/admin-settings-light.png" alt="Settings" loading="lazy"><img class="s-dark" src="shots/admin-settings-dark.png" alt="Settings" loading="lazy"></div><figcaption><b>Settings</b>Policy without a deploy.</figcaption></figure>
+        <figure class="gitem" data-area="admin"><div class="fr"><img class="s-light" src="shots/admin-activity-light.png" alt="Activity" loading="lazy"><img class="s-dark" src="shots/admin-activity-dark.png" alt="Activity" loading="lazy"></div><figcaption><b>Activity</b>Read-only audit trail.</figcaption></figure>
+        <figure class="gitem" data-area="admin"><div class="fr"><img class="s-light" src="shots/admin-reset-light.png" alt="Reset" loading="lazy"><img class="s-dark" src="shots/admin-reset-dark.png" alt="Reset" loading="lazy"></div><figcaption><b>Reset</b>Clearing a user's factors, with notice.</figcaption></figure>
+      </div>
+    </section>
+
+    <!-- UPGRADE -->
+    <section class="page hidden" data-page="upgrade">
+      <h2 id="why">Why this is a rewrite</h2>
+      <div class="cal d"><span class="i">!</span><p>1.x was audited as unsafe to run: unauthenticated XHR endpoints, TOTP secrets posted to a third-party QR service, no rate limiting, and two-factor removable without re-authentication. None of its code survives in 2.0, and every one of those flaws has a regression test.</p></div>
+      <p><b>Treat every 1.x TOTP secret as compromised.</b> They were transmitted to an external service to render the QR image. Users should re-enrol rather than carry a secret forward.</p>
+      <h2 id="steps">Checklist</h2>
+      <p>Your progress is saved in this browser.</p>
+      <div class="ckbar">
+        <div class="track"><div class="fill" id="ckfill"></div></div>
+        <span class="pct" id="ckpct"></span>
+        <button id="ckreset" type="button">Reset</button>
+      </div>
+      <div class="ck" id="ck">
+        <label><input type="checkbox"><span><span class="t">Read the changelog and this page in full</span><span class="d">There is no in-place upgrade path that preserves 1.x secrets safely.</span></span></label>
+        <label><input type="checkbox"><span><span class="t">Back up the database</span><span class="d">The migration drops and replaces 1.x tables.</span></span></label>
+        <label><input type="checkbox"><span><span class="t">Bump the constraint to ^2.0 and run composer update</span><span class="d">PHP 8.2+ and Nova 5.7+ are required.</span></span></label>
+        <label><input type="checkbox"><span><span class="t">Publish and run the new migrations</span><span class="d"><code>vendor:publish --tag=nova-two-factor-migrations</code>, then <code>migrate</code>.</span></span></label>
+        <label><input type="checkbox"><span><span class="t">Publish the config and the assets</span><span class="d">Use <code>--force</code> on assets so stale 1.x bundles are replaced.</span></span></label>
+        <label><input type="checkbox"><span><span class="t">Add the trait to every authenticatable model</span><span class="d">1.x attached behaviour differently; the trait is now required.</span></span></label>
+        <label><input type="checkbox"><span><span class="t">Define the admin gate</span><span class="d">The admin pages stay invisible until <code>nova-two-factor:admin</code> exists.</span></span></label>
+        <label><input type="checkbox"><span><span class="t">Run <code>nova-two-factor:upgrade</code></span><span class="d">It migrates what can be carried and reports what cannot.</span></span></label>
+        <label><input type="checkbox"><span><span class="t">Run <code>nova-two-factor:doctor</code> and fix every non-PASS line</span><span class="d">Especially the relying party and the exempt-pattern list.</span></span></label>
+        <label><input type="checkbox"><span><span class="t">Force re-enrollment and tell your users why</span><span class="d">Old secrets were exposed to a third party. This is the point of the upgrade.</span></span></label>
+      </div>
+    </section>
+
+    <!-- CHANGELOG -->
+    <section class="page hidden" data-page="changelog">
+      <h2 id="releases">Releases</h2>
+      <div class="tl">
+        <div class="rel">
+          <h3>2.1.0</h3>
+          <div class="when">21 September 2026</div>
+          <div class="grp"><h4>Added</h4><ul>
+            <li>Laravel 13 support — <code>illuminate/support</code> now allows <code>^13.0</code> alongside 11 and 12. Laravel 13 requires PHP 8.3, so an application on 8.2 resolves to Laravel 12 as before.</li>
+            <li>Nova 5.11 permitted, the first release supporting Laravel 13. The <code>&gt;=6.0.0</code> conflict stands.</li>
+          </ul></div>
+          <div class="grp"><h4>Changed</h4><ul>
+            <li>Test matrix moved to Testbench 11 and Pest 4 for the Laravel 13 path.</li>
+            <li><code>Inertia\ServiceProvider</code> registered explicitly in the test harness — Nova renders through Inertia but does not register it, leaving <code>Inertia\Ssr\Gateway</code> unbound under Inertia 3.</li>
+          </ul></div>
+        </div>
+        <div class="rel">
+          <h3>2.0.0</h3>
+          <div class="when">21 September 2026 · complete rewrite</div>
+          <div class="grp"><h4>Security</h4><ul>
+            <li>Unauthenticated XHR endpoints closed.</li>
+            <li>TOTP secrets no longer sent to a third-party QR service — codes render locally.</li>
+            <li>Rate limiting on every challenge, step-up and recovery route, per user and per IP.</li>
+            <li>Removing a factor now requires a verified session, not just a password.</li>
+            <li>TOTP replay protection moved into the database.</li>
+            <li>Recovery codes hashed individually behind a unique index.</li>
+          </ul></div>
+          <div class="grp"><h4>Added</h4><ul>
+            <li>Passkeys, email codes, and several factors per user.</li>
+            <li>Enforcement policy with three modes, grace, and per-role targeting.</li>
+            <li>Step-up re-authentication, trusted devices, audit trail.</li>
+            <li>Compliance overview, Settings and Activity pages.</li>
+            <li><code>doctor</code>, <code>reset</code> and <code>upgrade</code> commands.</li>
+          </ul></div>
+        </div>
+        <div class="rel">
+          <h3>1.0.0</h3>
+          <div class="when">4 March 2025</div>
+          <div class="grp"><h4>Note</h4><ul><li>Superseded. See the upgrade guide, and treat 1.x secrets as compromised.</li></ul></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page hidden" data-page="translations">
+      <h2 id="how">How it works</h2>
+      <p>Every user-facing string passes through <code>__()</code> — including the strings the pre-authentication JavaScript writes into the page after load, which are handed to it as a translated payload rather than translated in the browser.</p>
+      <p><b>English and Italian ship with the package.</b> A test fails the build if a string appears in the source without a matching key in <code>resources/lang/en.json</code>, so the catalogue cannot silently fall behind the code.</p>
+
+      <h2 id="adding">Adding a language</h2>
+      <p>Copy the package catalogue into your application and translate the values. Laravel merges yours over the package's, so you only need the keys you actually change.</p>
+<pre>cp vendor/gabrielesbaiz/nova-two-factor/resources/lang/en.json \
+   lang/vendor/nova-two-factor/de.json</pre>
+      <p>The file is a flat JSON map of English source string to translation.</p>
+<pre>{
+    "Verify your identity": "Bestätige deine Identität",
+    "Use another method": "Andere Methode verwenden",
+    "Each code works once.": "Jeder Code funktioniert einmal."
+}</pre>
+
+      <h2 id="collisions">Words your application also translates</h2>
+      <p>This is the one thing that bites. Laravel resolves a plain JSON key from <b>your application's</b> <code>lang/{locale}.json</code> before it ever reaches a package catalogue. A single-word key like <code>Required</code>, <code>Settings</code> or <code>Activity</code> will silently pick up whatever your application already means by it.</p>
+      <div class="cal w"><span class="i">!</span><p>Enforcement mode names live in a namespaced PHP catalogue — <code>nova-two-factor::enforcement.modes.*</code> — precisely for this reason. If you add strings of your own, prefer a namespaced key over a plain English one for any word an application is likely to own.</p></div>
+
+      <h2 id="queued">Queued mail</h2>
+      <p>Notifications capture the locale at construction, not at send.</p>
+<pre>public function __construct()
+{
+    $this->locale(App::getLocale());
+}</pre>
+      <p>Reminders and reset notices are queued, and a worker has no request behind it — so without this they would render in <code>app.locale</code> rather than the recipient's language.</p>
+
+      <h2 id="spa">Why strings appear in English inside Nova</h2>
+      <p>Translations register during <code>Nova::serving()</code> rather than at boot, because the locale at boot is still <code>app.locale</code>. If you see English in the Nova SPA while the rest of your panel is translated, a published catalogue is shadowing the package's — check <code>lang/vendor/nova-two-factor/</code> for a stale file left by an older version.</p>
+
+      <h2 id="contribute">Contributing a language</h2>
+      <p>Translations are welcome as pull requests. Add <code>resources/lang/{locale}.json</code> alongside the existing ones, keep the key order, and leave any string you are unsure of in English — a partial catalogue falls back cleanly, a wrong one does not.</p>
+    </section>
+    <section class="page hidden" data-page="project">
+      <h2 id="contributing">Contributing</h2>
+      <p>Thank you for considering contributing. The guide is in <a href="https://github.com/gabrielesbaiz/nova-two-factor/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.</p>
+
+      <h2 id="vulns">Security vulnerabilities</h2>
+      <p>Please review <a href="https://github.com/gabrielesbaiz/nova-two-factor/blob/main/SECURITY.md">SECURITY.md</a> for reporting a vulnerability. <b>Please do not open a public issue.</b></p>
+
+      <h2 id="credits">Credits</h2>
+      <p>Written and maintained by <a href="https://github.com/gabrielesbaiz">Gabriele Sbaiz</a>.</p>
+      <p>This package builds on Laravel, Nova, Fortify,
+        <a href="https://github.com/web-auth/webauthn-framework">web-auth/webauthn-lib</a>,
+        <a href="https://github.com/antonioribeiro/google2fa">pragmarx/google2fa</a>,
+        <a href="https://github.com/Bacon/BaconQrCode">bacon/bacon-qr-code</a>,
+        <a href="https://github.com/spatie/laravel-package-tools">spatie/laravel-package-tools</a>,
+        and the WebAuthn and TOTP specifications.</p>
+
+      <h2 id="support">Support this package</h2>
+      <p>If it is useful to you:</p>
+      <ul>
+        <li>⭐ <b>Star the repo.</b> Free, thirty seconds, and it is the first signal other developers look at.</li>
+        <li>❤️ <b><a href="https://github.com/sponsors/gabrielesbaiz">Become a sponsor</a>.</b> From $5 a month. Company tiers get your logo on this site.</li>
+        <li>🐛 <b>Open a good issue.</b> A clear reproduction is worth more than you think.</li>
+        <li>🗣️ <b>Tell another Laravel developer.</b> Word of mouth is how packages survive.</li>
+      </ul>
+
+      <h2 id="disclaimer">Disclaimer</h2>
+      <p>This package is provided <b>as is</b>, without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, title and non-infringement. To the fullest extent permitted by applicable law, in no event shall the authors, copyright holders or contributors be liable for any claim, damages or other liability — whether in an action of contract, tort or otherwise — arising from, out of or in connection with this package or its use, including without limitation any direct, indirect, incidental, special, exemplary, consequential or punitive damages, loss of data, loss of profits, business interruption, account lockouts, unauthorised access, or failure of any authentication control.</p>
+      <p>Two-factor authentication is a security control: whoever deploys it is responsible for it. That responsibility includes, and is not limited to, choosing appropriate configuration, running <code>nova-two-factor:doctor</code> before relying on it, testing enforcement and recovery on your own infrastructure, keeping recovery paths available to your users, meeting whatever regulatory or contractual obligations apply to you, and reviewing the code yourself before putting it in front of an account you cannot afford to lose. Nothing here constitutes security, legal or compliance advice, and no claim is made that this package makes any system, application or organisation secure or compliant with any standard.</p>
+      <div class="cal d"><span class="i">!</span><p>Use of this package is entirely at your own risk.</p></div>
+
+      <h2 id="license">License</h2>
+      <p>MIT. See <a href="https://github.com/gabrielesbaiz/nova-two-factor/blob/main/LICENSE.md">LICENSE.md</a>. The MIT licence's warranty disclaimer and limitation of liability apply in full, alongside the disclaimer above.</p>
+    </section>
+  </main>
+  <nav class="toc" id="toc" aria-label="On this page"></nav>
+</div>
+
+<div class="lb hidden" id="lb"><img id="lbimg" src="" alt=""><div class="cap" id="lbcap"></div></div>
+
+<footer>
+  <div class="fin">
+    <div><h4>Package</h4><ul>
+      <li><a href="https://github.com/gabrielesbaiz/nova-two-factor">GitHub</a></li>
+      <li><a href="https://packagist.org/packages/gabrielesbaiz/nova-two-factor">Packagist</a></li>
+      <li><a href="#/changelog">Changelog</a></li></ul></div>
+    <div><h4>Documentation</h4><ul>
+      <li><a href="#/docs">Introduction</a></li>
+      <li><a href="#/installation">Installation</a></li>
+      <li><a href="#/configuration">Configuration</a></li>
+      <li><a href="#/troubleshooting">Troubleshooting</a></li></ul></div>
+    <div><h4>Reference</h4><ul>
+      <li><a href="#/security">Security model</a></li>
+      <li><a href="#/commands">Artisan commands</a></li>
+      <li><a href="#/upgrade">Upgrading from 1.x</a></li></ul></div>
+    <div><h4>Project</h4><ul>
+      <li><a href="https://github.com/gabrielesbaiz/nova-two-factor/blob/main/SECURITY.md">Security policy</a></li>
+      <li><a href="https://github.com/sponsors/gabrielesbaiz">Sponsor</a></li></ul></div>
+  </div>
+  <div class="colo"><span>MIT licensed · Built by Gabriele Sbaiz</span><span>Requires a Laravel Nova licence, sold separately</span></div>
+</footer>
+
+<script src="theme.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
