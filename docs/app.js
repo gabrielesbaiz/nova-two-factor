@@ -1,4 +1,4 @@
-/* Nova Two-Factor — Signal site
+/* Nova Two-Factor — documentation site
    Hash router, command palette, scroll spy, and the interactive pieces. */
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const $ = (s, r = document) => r.querySelector(s);
@@ -60,7 +60,7 @@ function go() {
   const anchor = location.hash.split('#')[2];
   if (anchor) { const el = document.getElementById(anchor); if (el) { el.scrollIntoView(); return; } }
   scrollTo({top: 0, behavior: 'instant' in document.documentElement.style ? 'instant' : 'auto'});
-  document.title = (id === 'home' ? 'Signal' : ROUTES.find(r => r.id === id).title + ' · Nova Two-Factor');
+  document.title = (id === 'home' ? 'Nova Two-Factor' : ROUTES.find(r => r.id === id).title + ' · Nova Two-Factor');
 }
 addEventListener('hashchange', go);
 
