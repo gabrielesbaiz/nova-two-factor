@@ -918,8 +918,7 @@ php artisan vendor:publish --tag=nova-assets --force</pre>
           <h3>2.1.1</h3>
           <div class="when">22 September 2026</div>
           <div class="grp"><h4>Fixed</h4><ul>
-            <li>The user security page now uses the full width of Nova's content area. Nova caps that page at <code>max-w-7xl</code> and centres it, which left a wide screen mostly empty either side of a card that is a list of rows with controls on the right.</li>
-            <li>Deliberately not configurable — an application that prefers Nova's original width overrides one declaration in its own stylesheet.</li>
+            <li>The user security page now uses the full width of Nova's content area. Nova's page container applies <code>max-w-7xl mx-auto</code>; a <code>:has()</code> rule in <code>tool.css</code> clears <code>max-width</code> on the container holding this package's card. CSS only — no configuration key, no API change.</li>
           </ul></div>
         </div>
         <div class="rel">
