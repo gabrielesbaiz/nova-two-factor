@@ -19,10 +19,10 @@ const ROUTES = [
   {id: 'translations',   title: 'Translations',             group: 'Reference'},
   {id: 'commands',       title: 'Artisan commands',         group: 'Reference'},
   {id: 'troubleshooting',title: 'Troubleshooting',          group: 'Reference'},
-  {id: 'project',        title: 'Project & licence',        group: 'Reference'},
   {id: 'screens',        title: 'Screens',                  group: null},
   {id: 'upgrade',        title: 'Upgrading from 1.x',       group: null},
   {id: 'changelog',      title: 'Changelog',                group: null},
+  {id: 'project',        title: 'Project & licence',        group: null},
 ];
 const DOC_ORDER = ROUTES.filter(r => r.group).map(r => r.id);
 
@@ -35,7 +35,8 @@ const DOC_ORDER = ROUTES.filter(r => r.group).map(r => r.id);
   ).join('') + `<div class="sgroup"><h4>More</h4>
       <a href="#/screens" data-r="screens">Screens</a>
       <a href="#/upgrade" data-r="upgrade">Upgrading from 1.x</a>
-      <a href="#/changelog" data-r="changelog">Changelog</a></div>`;
+      <a href="#/changelog" data-r="changelog">Changelog</a>
+      <a href="#/project" data-r="project">Project &amp; licence</a></div>`;
 })();
 
 /* ---------------- router ---------------- */
