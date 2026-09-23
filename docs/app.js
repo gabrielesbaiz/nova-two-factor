@@ -34,9 +34,9 @@ const DOC_ORDER = ROUTES.filter(r => r.group).map(r => r.id);
     `<div class="sgroup"><h4>${g}</h4>${rs.map(r => `<a href="#/${r.id}" data-r="${r.id}">${r.title}</a>`).join('')}</div>`
   ).join('') + `<div class="sgroup"><h4>More</h4>
       <a href="#/screens" data-r="screens">Screens</a>
+      <a href="#/project" data-r="project">Project &amp; licence</a>
       <a href="#/upgrade" data-r="upgrade">Upgrading from 1.x</a>
-      <a href="#/changelog" data-r="changelog">Changelog</a>
-      <a href="#/project" data-r="project">Project &amp; licence</a></div>`;
+      <a href="#/changelog" data-r="changelog">Changelog</a></div>`;
 })();
 
 /* ---------------- router ---------------- */
