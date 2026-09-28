@@ -39,9 +39,41 @@ class Enforcement
      */
     protected static ?Closure $appliesToCallback = null;
 
+    /**
+     * Whether each user is in scope, for the rest of this request.
+     *
+     * `appliesTo()` is the first line of `blocks()`, `shouldRemind()`,
+     * `shouldWarn()` and `graceEndsAt()`, so one request asks it several times
+     * over — and the configured gate behind it is rarely free. Under a
+     * permission package it is a query, and a request that evaluated it twice
+     * ran that query twice for an answer that cannot change in between.
+     *
+     * @var array<string, bool>
+     */
+    protected array $scope = [];
+
+    /** @var array<int, string>|null */
+    protected ?array $patterns = null;
+
     public static function requireUsing(?Closure $callback): void
     {
         static::$appliesToCallback = $callback;
+
+        // The override decides who is in scope, so an answer given under the
+        // previous one is no longer an answer to the same question.
+        rescue(static fn () => app(self::class)->flush(), report: false);
+    }
+
+    /**
+     * Drop everything memoized for this request.
+     *
+     * Wired to the package's own events, which are dispatched by every path
+     * that changes what these answers depend on.
+     */
+    public function flush(): void
+    {
+        $this->scope = [];
+        $this->patterns = null;
     }
 
     public function mode(): EnforcementMode
@@ -66,17 +98,7 @@ class Enforcement
             return false;
         }
 
-        if (static::$appliesToCallback instanceof Closure) {
-            return (bool) call_user_func(static::$appliesToCallback, $user);
-        }
-
-        $gate = Config::get('nova-two-factor.enforcement.gate');
-
-        if (is_string($gate) && $gate !== '') {
-            return Gate::forUser($user)->allows($gate);
-        }
-
-        return true;
+        return $this->scope[$this->scopeKey($user)] ??= $this->resolveScope($user);
     }
 
     /**
@@ -326,6 +348,10 @@ class Enforcement
      */
     public function exceptPatterns(): array
     {
+        if ($this->patterns !== null) {
+            return $this->patterns;
+        }
+
         $novaPath = trim((string) Config::get('nova.path', '/nova'), '/');
         $prefix = $novaPath === '' ? '' : $novaPath.'/';
 
@@ -351,10 +377,37 @@ class Enforcement
 
         $configured = Config::get('nova-two-factor.enforcement.except', []);
 
-        return array_values(array_unique(array_merge(
+        return $this->patterns = array_values(array_unique(array_merge(
             $defaults,
             is_array($configured) ? array_map('strval', $configured) : [],
         )));
+    }
+
+    /**
+     * The part of `appliesTo()` worth memoizing: the host app's callback, or
+     * the configured gate. The mode and enabled checks above it are config
+     * reads, and a setting written mid-request has to take effect immediately.
+     */
+    protected function resolveScope(Authenticatable $user): bool
+    {
+        if (static::$appliesToCallback instanceof Closure) {
+            return (bool) call_user_func(static::$appliesToCallback, $user);
+        }
+
+        $gate = Config::get('nova-two-factor.enforcement.gate');
+
+        if (is_string($gate) && $gate !== '') {
+            return Gate::forUser($user)->allows($gate);
+        }
+
+        return true;
+    }
+
+    protected function scopeKey(Authenticatable $user): string
+    {
+        $id = $user->getAuthIdentifier();
+
+        return $user->getMorphClass().'|'.(is_scalar($id) ? (string) $id : spl_object_hash($user));
     }
 
     protected function snoozeKey(Authenticatable $user): string

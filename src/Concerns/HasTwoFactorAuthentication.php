@@ -11,6 +11,7 @@ use Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorMethod;
 use Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorRecoveryCode;
 use Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorTrustedDevice;
 use Gabrielesbaiz\NovaTwoFactor\Support\Enforcement;
+use Gabrielesbaiz\NovaTwoFactor\Support\FactorStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -74,10 +75,18 @@ trait HasTwoFactorAuthentication
 
     /**
      * The single predicate the challenge and the enforcement gate both consult.
+     *
+     * Memoized for the rest of the request: a guarded Nova request asks this
+     * three times over two middlewares, and asked three times it answered with
+     * three identical queries. See {@see FactorStatus} for why the memo stops
+     * at the request boundary.
      */
     public function hasTwoFactorEnabled(): bool
     {
-        return $this->twoFactorMethods()->confirmed()->exists();
+        return app(FactorStatus::class)->enabled(
+            $this,
+            fn (): bool => $this->twoFactorMethods()->confirmed()->exists(),
+        );
     }
 
     public function hasTwoFactorMethod(MethodType|string $type): bool

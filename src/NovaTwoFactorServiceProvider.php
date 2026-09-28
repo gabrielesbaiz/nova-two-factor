@@ -6,14 +6,21 @@ namespace Gabrielesbaiz\NovaTwoFactor;
 
 use Gabrielesbaiz\NovaTwoFactor\Contracts\AuditableEvent;
 use Gabrielesbaiz\NovaTwoFactor\Events\LockedOut;
+use Gabrielesbaiz\NovaTwoFactor\Events\MethodConfirmed;
+use Gabrielesbaiz\NovaTwoFactor\Events\MethodEnrolled;
+use Gabrielesbaiz\NovaTwoFactor\Events\MethodRemoved;
+use Gabrielesbaiz\NovaTwoFactor\Events\TwoFactorEvent;
+use Gabrielesbaiz\NovaTwoFactor\Events\TwoFactorReset;
 use Gabrielesbaiz\NovaTwoFactor\Listeners\DetectLockoutBurst;
 use Gabrielesbaiz\NovaTwoFactor\Listeners\WriteAuditLog;
+use Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorMethod;
 use Gabrielesbaiz\NovaTwoFactor\Otp\OtpCodeManager;
 use Gabrielesbaiz\NovaTwoFactor\RateLimiting\RegistersRateLimiters;
 use Gabrielesbaiz\NovaTwoFactor\Recovery\RecoveryCodeManager;
 use Gabrielesbaiz\NovaTwoFactor\Settings\Pause;
 use Gabrielesbaiz\NovaTwoFactor\Settings\SettingsRepository;
 use Gabrielesbaiz\NovaTwoFactor\Support\Enforcement;
+use Gabrielesbaiz\NovaTwoFactor\Support\FactorStatus;
 use Gabrielesbaiz\NovaTwoFactor\Support\TwoFactorSession;
 use Gabrielesbaiz\NovaTwoFactor\Totp\QrCodeGenerator;
 use Gabrielesbaiz\NovaTwoFactor\Totp\TotpProvider;
@@ -51,8 +58,16 @@ class NovaTwoFactorServiceProvider extends PackageServiceProvider
 
     public function packageRegistered(): void
     {
-        $this->app->singleton(Enforcement::class);
-        $this->app->singleton(SettingsRepository::class);
+        // Scoped rather than singleton: both hold state that belongs to one
+        // request and to no other. `Enforcement` now memoizes who is in scope,
+        // and `SettingsRepository` has always remembered the value underneath
+        // each override — which under Octane, where a singleton outlives the
+        // request that built it, meant a later request restoring a setting to a
+        // baseline recorded for an earlier one. `scoped()` is the same
+        // single-instance guarantee, released at the end of each request.
+        $this->app->scoped(Enforcement::class);
+        $this->app->scoped(SettingsRepository::class);
+        $this->app->scoped(FactorStatus::class);
         $this->app->singleton(Pause::class);
         $this->app->singleton(RecoveryCodeManager::class);
         $this->app->singleton(QrCodeGenerator::class);
@@ -101,6 +116,34 @@ class NovaTwoFactorServiceProvider extends PackageServiceProvider
         // individual rows are already in the log, so this only watches for the
         // shape, and stays silent until an operator sets a threshold.
         Event::listen(LockedOut::class, DetectLockoutBurst::class);
+
+        // The per-request memos are only safe because the package tells them
+        // when it has made them wrong, and it takes both halves of this to be
+        // told every time.
+        //
+        // Model events catch the ordinary writes — a method created, confirmed,
+        // or deleted one row at a time, including a host application doing it
+        // directly rather than through this package's actions.
+        $forget = function (TwoFactorMethod $method): void {
+            $this->app->make(FactorStatus::class)->flush();
+            $this->app->make(Enforcement::class)->flush();
+        };
+
+        TwoFactorMethod::saved($forget);
+        TwoFactorMethod::deleted($forget);
+
+        // Domain events catch what model events cannot see: a reset clears a
+        // user's factors with `$user->twoFactorMethods()->delete()`, and a
+        // relation-level delete fires no model event at all.
+        Event::listen([
+            MethodConfirmed::class,
+            MethodEnrolled::class,
+            MethodRemoved::class,
+            TwoFactorReset::class,
+        ], function (TwoFactorEvent $event): void {
+            $this->app->make(FactorStatus::class)->forget($event->user);
+            $this->app->make(Enforcement::class)->flush();
+        });
 
         // Nova's own logout invalidates the session, but the package cannot
         // depend on that: an application with a custom logout, or one that only

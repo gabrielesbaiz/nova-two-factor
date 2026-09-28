@@ -2,6 +2,41 @@
 
 All notable changes to `nova-two-factor` are documented here.
 
+## 2.1.2 — 2026-09-28
+
+### Changed
+
+- A guarded Nova request no longer asks the same question three times.
+  `hasTwoFactorEnabled()` is consulted once by `RequireTwoFactor` and twice more
+  by `RequireTwoFactorEnrollment` — through `blocks()`, then through
+  `shouldRemind()` or `shouldWarn()` — and each call issued its own `exists`
+  query. The answer is now memoized for the request in a new
+  `Support\FactorStatus`, and invalidated by both the model events and the
+  package events that change it, so a factor confirmed mid-request is seen
+  immediately. Three queries become one.
+- The enforcement gate is evaluated once per request rather than twice.
+  `appliesTo()` opens `blocks()`, `shouldRemind()`, `shouldWarn()` and
+  `graceEndsAt()`, and behind a permission package the configured gate is itself
+  a query. Memoized per user for the request, and dropped whenever
+  `Enforcement::requireUsing()` changes who is in scope.
+- The enforcement except-list is built once per request instead of on every
+  middleware pass. Both middlewares call `exceptPatterns()`, which rebuilt,
+  merged and de-duplicated the same array each time.
+
+  Together these halve the queries a guarded Nova request runs before it reaches
+  the application — and both middlewares are registered on `nova.api_middleware`
+  as well as `nova.middleware`, so a page that fires a dozen XHRs was paying for
+  all of it a dozen times over.
+
+### Fixed
+
+- `Enforcement` and `SettingsRepository` are bound with `scoped()` rather than
+  `singleton()`. `SettingsRepository` records the value underneath each setting
+  it overrides, which is per-request state; under Octane, where a singleton
+  outlives the request that built it, a later request could restore a setting to
+  a baseline recorded for an earlier one. Same single-instance guarantee,
+  released at the end of each request.
+
 ## 2.1.1 — 2026-09-22
 
 ### Fixed
