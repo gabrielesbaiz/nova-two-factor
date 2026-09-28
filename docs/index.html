@@ -12,7 +12,7 @@
 <meta property="og:title" content="Nova Two-Factor">
 <meta property="og:description" content="A second factor Laravel Nova does not ship: passkeys, authenticator apps, email codes and recovery codes, with enforcement and admin oversight.">
 <meta property="og:url" content="https://gabrielesbaiz.github.io/nova-two-factor/">
-<meta property="og:image" content="https://gabrielesbaiz.github.io/nova-two-factor/shots/admin-overview-dark.png">
+<meta property="og:image" content="https://gabrielesbaiz.github.io/nova-two-factor/art/nova-two-factor-logo.png">
 <meta name="twitter:card" content="summary_large_image">
 </head>
 <body>
@@ -25,7 +25,7 @@
 <div class="veil" aria-hidden="true"></div>
 
 <div class="nav"><div class="navin">
-  <a class="lg" href="#/home">Nova Two-Factor <span class="v">2.1.1</span></a>
+  <a class="lg" href="#/home">Nova Two-Factor <span class="v">2.1.2</span></a>
   <button id="burger" type="button">Menu</button>
   <div class="navsp"></div>
   <div class="navlinks">
@@ -52,7 +52,8 @@
   <div class="w">
     <div class="hero">
       <div>
-        <span class="tagpill"><i></i>v2.1.1 · Laravel 11–13 · Nova 5 · MIT</span>
+        <img class="mark" src="art/nova-two-factor-logo.png" alt="Nova Two-Factor" width="2172" height="724">
+        <span class="tagpill"><i></i>v2.1.2 · Laravel 11–13 · Nova 5 · MIT</span>
         <h1>
           <span class="line"><span>One password</span></span>
           <span class="line"><span>is one</span></span>
@@ -914,6 +915,19 @@ php artisan vendor:publish --tag=nova-assets --force</pre>
     <section class="page hidden" data-page="changelog">
       <h2 id="releases">Releases</h2>
       <div class="tl">
+        <div class="rel">
+          <h3>2.1.2</h3>
+          <div class="when">28 September 2026</div>
+          <div class="grp"><h4>Changed</h4><ul>
+            <li>A guarded Nova request no longer asks the same question three times. <code>hasTwoFactorEnabled()</code> is consulted once by <code>RequireTwoFactor</code> and twice more by <code>RequireTwoFactorEnrollment</code>, and each call issued its own <code>exists</code> query. Memoized for the request in a new <code>Support\FactorStatus</code>, invalidated by every model and package event that changes it. Three queries become one.</li>
+            <li>The enforcement gate is evaluated once per request rather than twice. Behind a permission package that gate is itself a query.</li>
+            <li>The enforcement except-list is built once per request instead of rebuilt, merged and de-duplicated on every middleware pass.</li>
+            <li>Together these halve the queries a guarded request runs before it reaches the application — and both middlewares sit on <code>nova.api_middleware</code> too, so a page firing a dozen XHRs was paying for all of it a dozen times over.</li>
+          </ul></div>
+          <div class="grp"><h4>Fixed</h4><ul>
+            <li><code>Enforcement</code> and <code>SettingsRepository</code> are bound with <code>scoped()</code> rather than <code>singleton()</code>. <code>SettingsRepository</code> remembers the value underneath each override — per-request state that, under Octane, outlived the request that recorded it, so a later request could restore a setting to an earlier request's baseline.</li>
+          </ul></div>
+        </div>
         <div class="rel">
           <h3>2.1.1</h3>
           <div class="when">22 September 2026</div>
