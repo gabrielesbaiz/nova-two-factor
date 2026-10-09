@@ -83,6 +83,32 @@ return [
             // or below the stored one: 'reject' | 'reject_and_disable' | 'log'.
             // Counters of zero are exempt — every synced passkey reports zero.
             'on_counter_regression' => 'reject',
+
+            // Case-insensitive substrings of the User-Agent. When the current
+            // request matches one, this method stops being offered — the
+            // driver reports itself unavailable, exactly as if it were
+            // disabled in config.
+            //
+            // The case this exists for is an embedded web view. On Apple
+            // platforms WebAuthn inside a `WKWebView` is gated behind the
+            // restricted `com.apple.developer.web-browser.public-key-credential`
+            // entitlement, granted only to browsers on review: the ceremony
+            // never reaches an authenticator and comes back as a bare
+            // `NotAllowedError`. That is the same error the browser raises when
+            // somebody dismisses the prompt, so the screen can only say
+            // "cancelled or timed out" — indistinguishable from a change of
+            // mind, and unfixable by the user, who is simply offered a button
+            // that can never work. Not offering it at all is the honest answer.
+            //
+            // Empty by default: only the application embedding Nova knows what
+            // its own shell announces itself as. Add the token your client
+            // appends to its User-Agent, for example:
+            //
+            //     'unsupported_user_agents' => ['MyAppWebView'],
+            //
+            // Already-enrolled passkeys are untouched; this hides the method
+            // from enrollment, like every other availability switch here.
+            'unsupported_user_agents' => [],
         ],
 
         'email' => [

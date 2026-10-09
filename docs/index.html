@@ -25,7 +25,7 @@
 <div class="veil" aria-hidden="true"></div>
 
 <div class="nav"><div class="navin">
-  <a class="lg" href="#/home">Nova Two-Factor <span class="v">2.1.2</span></a>
+  <a class="lg" href="#/home">Nova Two-Factor <span class="v">2.2.0</span></a>
   <button id="burger" type="button">Menu</button>
   <div class="navsp"></div>
   <div class="navlinks">
@@ -53,7 +53,7 @@
     <div class="hero">
       <div>
         <img class="mark" src="art/nova-two-factor-logo.png" alt="Nova Two-Factor" width="2172" height="724">
-        <span class="tagpill"><i></i>v2.1.2 · Laravel 11–13 · Nova 5 · MIT</span>
+        <span class="tagpill"><i></i>v2.2.0 · Laravel 11–13 · Nova 5 · MIT</span>
         <h1>
           <span class="line"><span>One password</span></span>
           <span class="line"><span>is one</span></span>
@@ -386,6 +386,7 @@ NOVA_TWO_FACTOR_LIMIT_WEBAUTHN=30</pre>
         <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.allowed_aaguids</span><span class="odef">default <b>[]</b></span></div><p class="odesc">Allow-list of authenticator models. Empty means any.</p></div>
         <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.timeout</span><span class="odef">default <b>60</b></span></div><p class="odesc">Seconds the browser prompt stays open.</p></div>
         <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.on_counter_regression</span><span class="odef">default <b>reject</b></span></div><p class="odesc">What to do when a signature counter goes backwards, which may indicate a cloned key. <code>log</code> accepts and records instead.</p></div>
+        <div class="opt"><div class="ohead"><span class="okey">methods.webauthn.unsupported_user_agents</span><span class="odef">default <b>[]</b></span></div><p class="odesc">Case-insensitive User-Agent substrings for which passkeys are not offered. Meant for Nova embedded in a native shell: inside an Apple <code>WKWebView</code> the API is reserved for browsers holding a restricted entitlement, and the ceremony fails with the same <code>NotAllowedError</code> a dismissed prompt gives — so the screen can only say "cancelled or timed out". Enrollment only; enrolled passkeys still answer the challenge.</p></div>
         <div class="opt"><div class="ohead"><span class="okey">methods.email.enabled</span><span class="odef">default <b>true</b></span></div><span class="oenv">NOVA_TWO_FACTOR_EMAIL_ENABLED</span><p class="odesc">Offer email codes.</p></div>
         <div class="opt"><div class="ohead"><span class="okey">methods.email.digits</span><span class="odef">default <b>6</b></span></div><p class="odesc">Code length.</p></div>
         <div class="opt"><div class="ohead"><span class="okey">methods.email.ttl</span><span class="odef">default <b>300</b></span></div><span class="oenv">NOVA_TWO_FACTOR_EMAIL_TTL</span><p class="odesc">Seconds a code lives.</p></div>
@@ -915,6 +916,15 @@ php artisan vendor:publish --tag=nova-assets --force</pre>
     <section class="page hidden" data-page="changelog">
       <h2 id="releases">Releases</h2>
       <div class="tl">
+        <div class="rel">
+          <h3>2.2.0</h3>
+          <div class="when">9 October 2026</div>
+          <div class="grp"><h4>Added</h4><ul>
+            <li><code>methods.webauthn.unsupported_user_agents</code> — case-insensitive User-Agent substrings for which passkeys stop being offered. A match makes <code>WebAuthnDriver::isAvailable()</code> report false, so the method leaves the enrollment list exactly as if it were switched off.</li>
+            <li>The case it exists for is Nova embedded in a native application. Inside an Apple <code>WKWebView</code> WebAuthn is gated behind the restricted <code>com.apple.developer.web-browser.public-key-credential</code> entitlement, granted only to browsers on review: the ceremony never reaches an authenticator and comes back as a bare <code>NotAllowedError</code> — the same error a dismissed prompt produces, which the screen can only render as "cancelled or timed out". A button that cannot work, under an explanation that blames the user.</li>
+            <li>Empty by default, evaluated only when there is a request to read, and never applied to console or queued work. Already-enrolled passkeys are untouched and still answer the challenge.</li>
+          </ul></div>
+        </div>
         <div class="rel">
           <h3>2.1.2</h3>
           <div class="when">28 September 2026</div>

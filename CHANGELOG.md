@@ -2,6 +2,32 @@
 
 All notable changes to `nova-two-factor` are documented here.
 
+## 2.2.0 — 2026-10-09
+
+### Added
+
+- `methods.webauthn.unsupported_user_agents`: a list of case-insensitive
+  User-Agent substrings for which passkeys stop being offered. When the current
+  request matches one, `WebAuthnDriver::isAvailable()` reports false and the
+  method disappears from enrollment, exactly as if it were switched off in
+  config.
+
+  The case this exists for is Nova embedded in a native application. On Apple
+  platforms WebAuthn inside a `WKWebView` is gated behind the restricted
+  `com.apple.developer.web-browser.public-key-credential` entitlement, granted
+  only to browsers on review — the ceremony never reaches an authenticator and
+  returns a bare `NotAllowedError`. That is the same error a dismissed prompt
+  produces, so the screen could only report "cancelled or timed out": a button
+  that can never work, under an explanation that says the user changed their
+  mind. Withdrawing the offer is the honest answer, and the User-Agent is the
+  only signal available before the ceremony starts.
+
+  Empty by default, so nothing changes until the embedding application names
+  its own client. Evaluated only when there is a request to read, so console
+  commands and queued work are never filtered. Already-enrolled passkeys are
+  untouched and still answer the challenge — the same rule every availability
+  switch here follows.
+
 ## 2.1.2 — 2026-09-28
 
 ### Changed

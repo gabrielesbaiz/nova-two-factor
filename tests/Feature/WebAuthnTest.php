@@ -363,3 +363,87 @@ it('verifies against the passkey that actually signed', function (): void {
     expect($result->method?->id)->toBe($second->id)
         ->and($result->failure)->not->toBe(VerificationResult::UNCONFIRMED_METHOD);
 });
+
+/**
+ * A client that cannot run a ceremony must not be offered one.
+ *
+ * Inside an embedded web view — an Apple `WKWebView` above all, where the API
+ * is reserved for browsers holding a restricted entitlement — the ceremony
+ * fails with the same `NotAllowedError` a dismissed prompt produces, so the
+ * screen can only say "cancelled or timed out". The button is unusable and the
+ * explanation is a lie.
+ */
+it('offers passkeys to an ordinary browser when no user agent is excluded', function (): void {
+    withUserAgent('Mozilla/5.0 (Macintosh) MyApp/2.1 EmbeddedWebView');
+
+    expect(app(Gabrielesbaiz\NovaTwoFactor\Drivers\WebAuthnDriver::class)->isAvailable())->toBeTrue();
+});
+
+it('stops offering passkeys to a user agent named as unsupported', function (): void {
+    config()->set('nova-two-factor.methods.webauthn.unsupported_user_agents', ['EmbeddedWebView']);
+
+    withUserAgent('Mozilla/5.0 (Macintosh) MyApp/2.1 EmbeddedWebView');
+
+    expect(app(Gabrielesbaiz\NovaTwoFactor\Drivers\WebAuthnDriver::class)->isAvailable())->toBeFalse();
+});
+
+it('matches an unsupported user agent without regard to case', function (): void {
+    config()->set('nova-two-factor.methods.webauthn.unsupported_user_agents', ['embeddedWEBVIEW']);
+
+    withUserAgent('Mozilla/5.0 (Macintosh) MyApp/2.1 EmbeddedWebView');
+
+    expect(app(Gabrielesbaiz\NovaTwoFactor\Drivers\WebAuthnDriver::class)->isAvailable())->toBeFalse();
+});
+
+it('keeps offering passkeys to a browser that matches nothing on the list', function (): void {
+    config()->set('nova-two-factor.methods.webauthn.unsupported_user_agents', ['EmbeddedWebView']);
+
+    withUserAgent('Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 Safari/605.1.15');
+
+    expect(app(Gabrielesbaiz\NovaTwoFactor\Drivers\WebAuthnDriver::class)->isAvailable())->toBeTrue();
+});
+
+it('drops the method from enrollment when the client cannot run a ceremony', function (): void {
+    config()->set('nova-two-factor.methods.webauthn.unsupported_user_agents', ['EmbeddedWebView']);
+
+    withUserAgent('Mozilla/5.0 (Macintosh) MyApp/2.1 EmbeddedWebView');
+
+    $types = app(TwoFactorManager::class)->availableDrivers()
+        ->map(static fn ($driver) => $driver->type()->value)
+        ->all();
+
+    expect($types)->not->toContain(MethodType::WebAuthn->value)
+        ->and($types)->toContain(MethodType::Totp->value);
+});
+
+it('filters nothing outside an HTTP request', function (): void {
+    // `isAvailable()` is reached from the console and from queued work too,
+    // where there is no User-Agent to read. Unknown must never mean excluded,
+    // or a scheduled command would decide passkeys are off.
+    config()->set('nova-two-factor.methods.webauthn.unsupported_user_agents', ['EmbeddedWebView']);
+
+    withUserAgent(null);
+
+    expect(app(Gabrielesbaiz\NovaTwoFactor\Drivers\WebAuthnDriver::class)->isAvailable())->toBeTrue();
+});
+
+/**
+ * Put a request carrying this User-Agent in front of the driver.
+ *
+ * `null` stands for the console and the queue: no request at all, which is the
+ * case that must not be mistaken for an excluded client.
+ */
+function withUserAgent(?string $agent): void
+{
+    if ($agent === null) {
+        app()->forgetInstance('request');
+
+        return;
+    }
+
+    app()->instance('request', Illuminate\Http\Request::create(
+        '/',
+        'GET',
+        server: ['HTTP_USER_AGENT' => $agent],
+    ));
+}

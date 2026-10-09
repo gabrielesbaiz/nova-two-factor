@@ -18,6 +18,7 @@ use Gabrielesbaiz\NovaTwoFactor\WebAuthn\AaguidRegistry;
 use Gabrielesbaiz\NovaTwoFactor\WebAuthn\CeremonyStore;
 use Gabrielesbaiz\NovaTwoFactor\WebAuthn\WebAuthnService;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
@@ -46,7 +47,11 @@ class WebAuthnDriver implements TwoFactorMethodDriver
 
     public function isAvailable(): bool
     {
-        return (bool) Config::get('nova-two-factor.methods.webauthn.enabled', true);
+        if (! Config::get('nova-two-factor.methods.webauthn.enabled', true)) {
+            return false;
+        }
+
+        return ! $this->clientCannotUseWebAuthn();
     }
 
     public function beginEnrollment(Authenticatable $user, array $input = []): EnrollmentIntent
@@ -219,6 +224,72 @@ class WebAuthnDriver implements TwoFactorMethodDriver
     public function suggestName(array $input = []): string
     {
         return $this->type()->label();
+    }
+
+    /**
+     * Whether the caller is a client configured as unable to run a ceremony.
+     *
+     * Some embedders cannot perform WebAuthn at all — an Apple `WKWebView`
+     * being the usual one, where the API is reserved for browsers holding a
+     * restricted entitlement. The ceremony fails with a plain `NotAllowedError`,
+     * which is also what a dismissed prompt produces, so the screen can only
+     * report "cancelled or timed out": the user is handed a button that is
+     * guaranteed to fail and told nothing useful about why. Withdrawing the
+     * offer is the only honest outcome, and the User-Agent is the only signal
+     * available before the ceremony starts.
+     *
+     * Configuration-driven and empty by default, so nothing changes until the
+     * embedding application names its own client.
+     */
+    protected function clientCannotUseWebAuthn(): bool
+    {
+        /** @var array<int, mixed> $needles */
+        $needles = (array) Config::get('nova-two-factor.methods.webauthn.unsupported_user_agents', []);
+
+        if ($needles === []) {
+            return false;
+        }
+
+        $agent = $this->currentUserAgent();
+
+        if ($agent === null || $agent === '') {
+            return false;
+        }
+
+        foreach ($needles as $needle) {
+            $needle = is_string($needle) ? trim($needle) : '';
+
+            if ($needle !== '' && str_contains(mb_strtolower($agent), mb_strtolower($needle))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The User-Agent of the request being served, if there is one.
+     *
+     * `isAvailable()` is also reached from the console and from queued work,
+     * where there is no request to inspect — and where the container may still
+     * hold a synthetic one left over from `Request::capture()`. Anything other
+     * than a real header reads as "unknown", which filters nothing.
+     */
+    protected function currentUserAgent(): ?string
+    {
+        if (! app()->bound('request')) {
+            return null;
+        }
+
+        $request = app('request');
+
+        if (! $request instanceof Request) {
+            return null;
+        }
+
+        $agent = $request->userAgent();
+
+        return is_string($agent) ? $agent : null;
     }
 
     /**
