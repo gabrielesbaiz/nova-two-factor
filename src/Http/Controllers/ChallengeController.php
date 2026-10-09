@@ -8,6 +8,7 @@ use Gabrielesbaiz\NovaTwoFactor\Enums\ChallengePurpose;
 use Gabrielesbaiz\NovaTwoFactor\Events\LockedOut;
 use Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorMethod;
 use Gabrielesbaiz\NovaTwoFactor\RateLimiting\KnownDevice;
+use Gabrielesbaiz\NovaTwoFactor\Support\OfferedMethods;
 use Gabrielesbaiz\NovaTwoFactor\Support\TwoFactorSession;
 use Gabrielesbaiz\NovaTwoFactor\TrustedDevices\TrustedDeviceManager;
 use Gabrielesbaiz\NovaTwoFactor\TwoFactorManager;
@@ -39,12 +40,16 @@ class ChallengeController extends Controller
     public function show(Request $request): View
     {
         $user = $this->novaUserOrFail();
-        $methods = $user->confirmedTwoFactorMethods();
+        $recoveryCodesRemaining = $this->twoFactor->recoveryCodes()->unusedCount($user);
+
+        // Recovery codes count as a way in here, because this screen renders
+        // one: a user left with codes and no usable factor still has a door.
+        $offered = OfferedMethods::for($user, otherWaysIn: $recoveryCodesRemaining);
 
         return view('nova-two-factor::challenge', [
-            'methods' => $methods,
-            'default' => $user->defaultTwoFactorMethod(),
-            'recoveryCodesRemaining' => $this->twoFactor->recoveryCodes()->unusedCount($user),
+            'methods' => $offered->methods,
+            'default' => $offered->default,
+            'recoveryCodesRemaining' => $recoveryCodesRemaining,
             'trustedDevicesEnabled' => $this->trustedDevices->enabled(),
             'trustedDeviceDays' => (int) Config::get('nova-two-factor.trusted_devices.days', 30),
             'intended' => $request->session()->get('url.intended', $this->novaPath()),

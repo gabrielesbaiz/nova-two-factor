@@ -24,9 +24,27 @@ All notable changes to `nova-two-factor` are documented here.
 
   Empty by default, so nothing changes until the embedding application names
   its own client. Evaluated only when there is a request to read, so console
-  commands and queued work are never filtered. Already-enrolled passkeys are
-  untouched and still answer the challenge — the same rule every availability
-  switch here follows.
+  commands and queued work are never filtered.
+
+- The login challenge and the step-up screen stop *listing* a factor the client
+  cannot run — the case that actually matters, since anyone meeting this
+  enrolled their passkey from a desktop browser and is now inside the embedded
+  view with it offered as their default.
+
+  Guarded: the factor is withdrawn only while the user has another way in — a
+  second confirmed method, or, on the challenge screen, a remaining recovery
+  code. Recovery codes do not count on a step-up, which offers no recovery
+  route by design. If a passkey is the only thing an account holds, it stays on
+  screen: a button that fails can be worked around by opening a real browser,
+  and an empty screen cannot be worked around by anybody.
+
+  Presentation only. `prepare` and `store` are untouched on both screens, so a
+  direct link, a stale tab or a client this guesses wrong about can still
+  attempt the ceremony — the same rule `TwoFactorManager::verify()` follows,
+  where disabling a method never shuts out somebody who already enrolled it.
+  New `Support\OfferedMethods` decides what a proving screen shows, and a new
+  `Contracts\ClientDependent` is what separates "cannot be run here" from
+  "switched off in config"; only the former hides an enrolled factor.
 
 ## 2.1.2 — 2026-09-28
 

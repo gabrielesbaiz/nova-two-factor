@@ -7,6 +7,7 @@ namespace Gabrielesbaiz\NovaTwoFactor\Http\Controllers;
 use Gabrielesbaiz\NovaTwoFactor\Enums\ChallengePurpose;
 use Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorMethod;
 use Gabrielesbaiz\NovaTwoFactor\StepUp\StepUpManager;
+use Gabrielesbaiz\NovaTwoFactor\Support\OfferedMethods;
 use Gabrielesbaiz\NovaTwoFactor\TwoFactorManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -32,11 +33,15 @@ class StepUpController extends Controller
             'intended' => ['nullable', 'string', 'max:2048'],
         ]);
 
+        // No recovery route is offered on a step-up by design, so a confirmed
+        // method is the only thing that counts as a way through here.
+        $offered = OfferedMethods::for($user);
+
         return view('nova-two-factor::step-up', [
             'scope' => $validated['scope'],
             'intended' => $this->safeIntended($validated['intended'] ?? null),
-            'methods' => $user->confirmedTwoFactorMethods(),
-            'default' => $user->defaultTwoFactorMethod(),
+            'methods' => $offered->methods,
+            'default' => $offered->default,
         ]);
     }
 

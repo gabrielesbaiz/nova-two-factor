@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Gabrielesbaiz\NovaTwoFactor\Drivers;
 
+use Gabrielesbaiz\NovaTwoFactor\Contracts\ClientDependent;
 use Gabrielesbaiz\NovaTwoFactor\Contracts\TwoFactorMethodDriver;
 use Gabrielesbaiz\NovaTwoFactor\Enums\ChallengePurpose;
 use Gabrielesbaiz\NovaTwoFactor\Enums\MethodType;
@@ -30,7 +31,7 @@ use Throwable;
  * The only phishing-resistant factor here: the assertion is bound to the origin
  * by the browser, so a proxied login page cannot replay it.
  */
-class WebAuthnDriver implements TwoFactorMethodDriver
+class WebAuthnDriver implements ClientDependent, TwoFactorMethodDriver
 {
     private const OPTIONS_KEY = 'nova_two_factor.webauthn_options';
 
@@ -51,6 +52,19 @@ class WebAuthnDriver implements TwoFactorMethodDriver
             return false;
         }
 
+        return $this->supportsCurrentClient();
+    }
+
+    /**
+     * Whether the client making this request can run a ceremony at all.
+     *
+     * Separate from `isAvailable()` because the two answers are used
+     * differently: policy hides a method from enrollment only, while this also
+     * decides what the challenge screen bothers to offer somebody who enrolled
+     * a passkey from a desktop browser and is now inside an embedded web view.
+     */
+    public function supportsCurrentClient(): bool
+    {
         return ! $this->clientCannotUseWebAuthn();
     }
 

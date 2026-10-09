@@ -512,3 +512,131 @@ it('makes hidden win over its own display rules', function (): void {
             ->and($override)->toBeGreaterThan((int) $declaration);
     }
 });
+
+/**
+ * A client that cannot run a WebAuthn ceremony is not offered one — but only
+ * while it still has somewhere else to go.
+ *
+ * Whoever meets this has already enrolled a passkey from a desktop browser and
+ * is now inside an embedded web view, where the engine refuses the API and
+ * returns the same error a dismissed prompt gives. The screen can only say
+ * "cancelled or timed out", which blames the user for a button that was never
+ * going to work.
+ */
+function enrollPasskey(User $user, string $name = 'Passkey'): Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorMethod
+{
+    return $user->twoFactorMethods()->create([
+        'type' => Gabrielesbaiz\NovaTwoFactor\Enums\MethodType::WebAuthn,
+        'name' => $name,
+        'credential' => ['publicKey' => 'x'],
+        'credential_id' => $id = 'cred-'.bin2hex(random_bytes(6)),
+        'credential_id_hash' => hash('sha256', $id),
+        'confirmed_at' => now(),
+    ]);
+}
+
+function enrollAuthenticatorApp(User $user): Gabrielesbaiz\NovaTwoFactor\Models\TwoFactorMethod
+{
+    return $user->twoFactorMethods()->create([
+        'type' => Gabrielesbaiz\NovaTwoFactor\Enums\MethodType::Totp,
+        'name' => 'Authenticator app',
+        'secret' => 'JBSWY3DPEHPK3PXP',
+        'confirmed_at' => now(),
+    ]);
+}
+
+function insideEmbeddedWebView(): object
+{
+    config()->set('nova-two-factor.methods.webauthn.unsupported_user_agents', ['EmbeddedWebView']);
+
+    return test()->withHeader('User-Agent', 'Mozilla/5.0 (Macintosh) MyApp/2.1 EmbeddedWebView');
+}
+
+it('withdraws the passkey from the challenge when another factor remains', function (): void {
+    enrollPasskey($this->user);
+    enrollAuthenticatorApp($this->user);
+
+    insideEmbeddedWebView()
+        ->actingAs($this->user)
+        ->get(novaPageUrl('challenge'))
+        ->assertOk()
+        ->assertDontSee('data-method-type="webauthn"', false)
+        ->assertSee('data-method-type="totp"', false);
+});
+
+it('keeps offering the passkey at the challenge to a client that can run it', function (): void {
+    enrollPasskey($this->user);
+    enrollAuthenticatorApp($this->user);
+
+    config()->set('nova-two-factor.methods.webauthn.unsupported_user_agents', ['EmbeddedWebView']);
+
+    $this->withHeader('User-Agent', 'Mozilla/5.0 (Macintosh) Safari/605.1.15')
+        ->actingAs($this->user)
+        ->get(novaPageUrl('challenge'))
+        ->assertOk()
+        ->assertSee('data-method-type="webauthn"', false);
+});
+
+it('leaves the passkey on the challenge when it is the only way in', function (): void {
+    // A failing button can be worked around by opening a real browser. An empty
+    // screen cannot be worked around by anybody.
+    enrollPasskey($this->user);
+
+    insideEmbeddedWebView()
+        ->actingAs($this->user)
+        ->get(novaPageUrl('challenge'))
+        ->assertOk()
+        ->assertSee('data-method-type="webauthn"', false);
+});
+
+it('withdraws the passkey when only recovery codes are left to sign in with', function (): void {
+    // The challenge screen renders a recovery row, so codes are a real door out
+    // of it — unlike the step-up screen, which offers none.
+    enrollPasskey($this->user);
+    app(Gabrielesbaiz\NovaTwoFactor\Recovery\RecoveryCodeManager::class)->regenerate($this->user);
+
+    insideEmbeddedWebView()
+        ->actingAs($this->user)
+        ->get(novaPageUrl('challenge'))
+        ->assertOk()
+        ->assertDontSee('data-method-type="webauthn"', false)
+        ->assertSee('data-method-type="recovery_code"', false);
+});
+
+it('withdraws the passkey from a step-up when another factor remains', function (): void {
+    enrollPasskey($this->user);
+    enrollAuthenticatorApp($this->user);
+
+    insideEmbeddedWebView()
+        ->actingAs($this->user)
+        ->get(novaPageUrl('step-up').'?scope=users.destroy')
+        ->assertOk()
+        ->assertDontSee('data-method-type="webauthn"', false)
+        ->assertSee('data-method-type="totp"', false);
+});
+
+it('leaves the passkey on a step-up when it is the only factor', function (): void {
+    // Recovery codes are deliberately not offered on a step-up, so they cannot
+    // stand in for the factor being withdrawn here.
+    enrollPasskey($this->user);
+    app(Gabrielesbaiz\NovaTwoFactor\Recovery\RecoveryCodeManager::class)->regenerate($this->user);
+
+    insideEmbeddedWebView()
+        ->actingAs($this->user)
+        ->get(novaPageUrl('step-up').'?scope=users.destroy')
+        ->assertOk()
+        ->assertSee('data-method-type="webauthn"', false);
+});
+
+it('still lets a withdrawn passkey be attempted directly', function (): void {
+    // Hiding is a presentation decision. The endpoints stay open, so a direct
+    // link, a stale tab or a client we guessed wrong about can still try.
+    $passkey = enrollPasskey($this->user);
+    enrollAuthenticatorApp($this->user);
+
+    insideEmbeddedWebView()
+        ->actingAs($this->user)
+        ->postJson(novaPageUrl('challenge/prepare'), ['method_id' => $passkey->id])
+        ->assertOk()
+        ->assertJsonStructure(['public_key']);
+});
